@@ -1,6 +1,5 @@
 import { StravaDataDisplay } from "@/components/strava-data-display"
 import { LastRide } from "@/components/last-ride"
-import { Button } from "@/components/ui/button"
 
 export default function Page() {
   return (

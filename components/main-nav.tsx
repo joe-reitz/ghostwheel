@@ -23,7 +23,7 @@ export function MainNav() {
   const pathname = usePathname()
 
   return (
-    <div className="flex items-center space-x-4 lg:space-x-6 pl-4 bg-purple-500">
+    <div className="flex items-center space-x-4 lg:space-x-6 pl-4">
       <Link href="/" className="flex items-center space-x-2 transition-opacity hover:opacity-80">
         <Image
           src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/DALL%C2%B7E%202025-01-19%2013.28.29%20-%20A%20minimalist%208-bit%20style%20logo%20for%20'GhostWheel,'%20featuring%20a%20pixelated%20ghost%20riding%20a%20bicycle%20wheel.%20The%20ghost%20has%20a%20simple%20blocky%20design%20with%20a%20rounde-XAhPTCyUMkh8tYcwY2085QPR9r4r9u.webp"

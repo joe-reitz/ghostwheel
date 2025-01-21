@@ -1,7 +1,6 @@
 "use client"
 
-import { Tooltip } from "recharts"
-import { Card } from "@/components/ui/card"
+import { Line, LineChart, ResponsiveContainer, XAxis, YAxis } from "recharts"
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart"
 
 const data = [

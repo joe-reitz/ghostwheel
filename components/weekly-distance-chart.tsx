@@ -50,7 +50,13 @@ export function WeeklyDistanceChart({ activities }: { activities: Activity[] }) 
                 tickFormatter={(value) => `${value}km`}
               />
               <Tooltip
-                content={({ active, payload }) => {
+                content={({
+                  active,
+                  payload,
+                }: {
+                  active: boolean | undefined
+                  payload: Array<{ value: number; payload: { week: string } }> | undefined
+                }) => {
                   if (active && payload && payload.length) {
                     return (
                       <div className="rounded-lg border bg-background p-2 shadow-sm">
@@ -61,7 +67,7 @@ export function WeeklyDistanceChart({ activities }: { activities: Activity[] }) 
                           </div>
                           <div className="flex flex-col">
                             <span className="text-[0.70rem] uppercase text-muted-foreground">Distance</span>
-                            <span className="font-bold">{payload[0].value?.toFixed(1)}km</span>
+                            <span className="font-bold">{payload[0].value.toFixed(1)}km</span>
                           </div>
                         </div>
                       </div>

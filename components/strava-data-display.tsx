@@ -5,8 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { WeeklyDistanceChart } from "./weekly-distance-chart"
-import { HeartRateZones } from "./heart-rate-zones"
+import HeartRateZones from "./heart-rate-zones"
 import { ElevationProfile } from "./elevation-profile"
+import { useStrava } from "@/lib/strava-context"
 
 interface StravaActivity {
   id: number
@@ -18,6 +19,7 @@ interface StravaActivity {
   average_heartrate?: number
   max_heartrate?: number
   average_watts?: number
+  type: string
 }
 
 interface StravaData {
@@ -27,13 +29,16 @@ interface StravaData {
   totalElevation: number
 }
 
-export function StravaDataDisplay({ accessToken }: { accessToken: string }) {
+function StravaDataDisplay() {
+  const { accessToken } = useStrava()
   const [stravaData, setStravaData] = useState<StravaData | null>(null)
   const [timeframe, setTimeframe] = useState("30") // Default to 30 days
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchStravaData = async () => {
+      if (!accessToken) return
+
       setLoading(true)
       try {
         // Calculate the epoch timestamp for the start date based on timeframe
@@ -104,7 +109,7 @@ export function StravaDataDisplay({ accessToken }: { accessToken: string }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-white">Activity Analysis</h2>
+        <h2 className="text-2xl font-bold">Activity Analysis</h2>
         <Select value={timeframe} onValueChange={setTimeframe}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Select timeframe" />
@@ -114,6 +119,8 @@ export function StravaDataDisplay({ accessToken }: { accessToken: string }) {
             <SelectItem value="30">Last 30 days</SelectItem>
             <SelectItem value="90">Last 90 days</SelectItem>
             <SelectItem value="365">Last 12 months</SelectItem>
+            <SelectItem value="7300">All Time</SelectItem>
+
           </SelectContent>
         </Select>
       </div>
@@ -149,4 +156,6 @@ export function StravaDataDisplay({ accessToken }: { accessToken: string }) {
     </div>
   )
 }
+
+export { StravaDataDisplay }
 

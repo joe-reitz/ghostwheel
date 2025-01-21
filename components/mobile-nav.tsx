@@ -10,6 +10,31 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Menu } from "lucide-react"
 import Image from "next/image"
 
+interface Route {
+  href: string
+  label: string
+  icon: any
+  color?: string
+}
+
+const routes: Route[] = [
+  {
+    href: "/dashboard",
+    label: "Dashboard",
+    icon: () => null,
+  },
+  {
+    href: "/goals",
+    label: "Goals",
+    icon: () => null,
+  },
+  {
+    href: "/ai-assistant",
+    label: "AI Assistant",
+    icon: () => null,
+  },
+]
+
 export function MobileNav() {
   const [open, setOpen] = React.useState(false)
   const pathname = usePathname()

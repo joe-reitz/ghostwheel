@@ -17,7 +17,7 @@ export function ElevationProfile({ activities }: { activities: Activity[] }) {
       elevation: activity.total_elevation_gain,
       name: activity.name,
     }))
-    .reverse() // Show oldest to newest
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) // Sort from oldest to newest
 
   return (
     <Card>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Clock, Map, TrendingUp } from "lucide-react"
+import { useStrava } from "@/lib/strava-context"
 
 interface StravaActivity {
   id: number
@@ -18,13 +19,16 @@ interface StravaActivity {
   sport_type: string
 }
 
-export function LastRide({ accessToken }: { accessToken: string }) {
+export function LastRide() {
+  const { accessToken } = useStrava()
   const [activity, setActivity] = useState<StravaActivity | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchLastRide = async () => {
+      if (!accessToken) return
+
       try {
         // Fetch more activities to ensure we find a ride
         const response = await fetch(
@@ -63,9 +67,7 @@ export function LastRide({ accessToken }: { accessToken: string }) {
       }
     }
 
-    if (accessToken) {
-      fetchLastRide()
-    }
+    fetchLastRide()
   }, [accessToken])
 
   if (error) {

@@ -37,6 +37,21 @@ export function HeartRateZones({ activities }: { activities: Activity[] }) {
     }, 0),
   }))
 
+  if (zoneData.every((zone) => zone.minutes === 0)) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Heart Rate Zones</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-center text-muted-foreground">
+            No heart rate data available for the selected time period.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -83,4 +98,6 @@ export function HeartRateZones({ activities }: { activities: Activity[] }) {
     </Card>
   )
 }
+
+export default HeartRateZones
 

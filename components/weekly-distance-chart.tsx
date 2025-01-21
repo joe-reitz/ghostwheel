@@ -13,7 +13,11 @@ interface WeeklyData {
   distance: number
 }
 
-export function WeeklyDistanceChart({ activities }: { activities: Activity[] }) {
+interface WeeklyDistanceChartProps {
+  activities: Activity[]
+}
+
+export function WeeklyDistanceChart({ activities }: WeeklyDistanceChartProps) {
   // Process activities into weekly data
   const weeklyData: WeeklyData[] = activities.reduce((acc: WeeklyData[], activity) => {
     const date = new Date(activity.start_date)
@@ -50,24 +54,19 @@ export function WeeklyDistanceChart({ activities }: { activities: Activity[] }) 
                 tickFormatter={(value) => `${value}km`}
               />
               <Tooltip
-                content={({
-                  active,
-                  payload,
-                }: {
-                  active: boolean | undefined
-                  payload: Array<{ value: number; payload: { week: string } }> | undefined
-                }) => {
+                content={({ active, payload }) => {
                   if (active && payload && payload.length) {
+                    const data = payload[0] as { value: number; payload: { week: string } }
                     return (
                       <div className="rounded-lg border bg-background p-2 shadow-sm">
                         <div className="grid grid-cols-2 gap-2">
                           <div className="flex flex-col">
                             <span className="text-[0.70rem] uppercase text-muted-foreground">Week</span>
-                            <span className="font-bold">{payload[0].payload.week}</span>
+                            <span className="font-bold">{data.payload.week}</span>
                           </div>
                           <div className="flex flex-col">
                             <span className="text-[0.70rem] uppercase text-muted-foreground">Distance</span>
-                            <span className="font-bold">{payload[0].value.toFixed(1)}km</span>
+                            <span className="font-bold">{data.value.toFixed(1)}km</span>
                           </div>
                         </div>
                       </div>

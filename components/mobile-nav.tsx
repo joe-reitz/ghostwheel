@@ -13,7 +13,7 @@ import Image from "next/image"
 interface Route {
   href: string
   label: string
-  icon: any
+  icon: React.ElementType
   color?: string
 }
 

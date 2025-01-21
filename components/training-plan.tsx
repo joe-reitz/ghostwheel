@@ -9,7 +9,15 @@ interface TrainingPlan {
   keyWorkouts: string[]
 }
 
-export function TrainingPlan({ goal, stravaData }: { goal: string; stravaData: any }) {
+interface StravaData {
+  activities: Array<{
+    id: number
+    name: string
+    distance: number
+  }>
+}
+
+export function TrainingPlan({ goal, stravaData }: { goal: string; stravaData: StravaData }) {
   const [plan, setPlan] = useState<TrainingPlan | null>(null)
 
   useEffect(() => {

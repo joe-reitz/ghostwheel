@@ -1,13 +1,37 @@
-async function stravaCallback(request: Request) {
-  try {
-    const url = new URL(request.url)
-    const code = url.searchParams.get("code")
+import { NextResponse } from "next/server"
 
-    if (!code) {
-      return NextResponse.json({ error: "Missing code parameter" }, { status: 400 })
+// We need to explicitly export the HTTP methods we support
+export const dynamic = "force-dynamic"
+
+export async function GET(request: Request) {
+  try {
+    // Parse the incoming request URL
+    const requestUrl = new URL(request.url)
+    console.log("Incoming request URL:", requestUrl.toString())
+
+    // Get the code and error from URL parameters
+    const code = requestUrl.searchParams.get("code")
+    const error = requestUrl.searchParams.get("error")
+
+    if (error) {
+      console.error("Error returned from Strava:", error)
+      throw new Error(`Strava authorization error: ${error}`)
     }
 
-    const response = await fetch("https://www.strava.com/oauth/token", {
+    // Validate required environment variables
+    if (!process.env.STRAVA_CLIENT_ID || !process.env.STRAVA_CLIENT_SECRET) {
+      console.error("Missing required environment variables")
+      throw new Error("Configuration error: Missing Strava credentials")
+    }
+
+    // Validate the authorization code
+    if (!code) {
+      console.error("No authorization code received from Strava")
+      throw new Error("Missing authorization code")
+    }
+
+    // Exchange the authorization code for tokens
+    const tokenResponse = await fetch("https://www.strava.com/oauth/token", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -15,28 +39,28 @@ async function stravaCallback(request: Request) {
       body: JSON.stringify({
         client_id: process.env.STRAVA_CLIENT_ID,
         client_secret: process.env.STRAVA_CLIENT_SECRET,
-        code,
+        code: code,
+        grant_type: "authorization_code",
       }),
     })
 
-    if (!response.ok) {
-      return NextResponse.json({ error: "Strava API request failed" }, { status: response.status })
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text()
+      console.error("Strava token exchange failed:", errorText)
+      throw new Error(`Strava API error: ${tokenResponse.status} ${errorText}`)
     }
 
-    const data = await response.json()
+    const data = await tokenResponse.json()
+    console.log("Token exchange successful")
 
-    // Store the access token in the session
-    const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: "Session not found" }, { status: 401 })
-    }
+    // Get the base URL for redirects
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || requestUrl.origin
+    const dashboardUrl = new URL("/dashboard", baseUrl)
+    dashboardUrl.searchParams.set("access_token", data.access_token)
 
-    session.stravaToken = data.access_token
-    await updateSession(session)
-
-    return NextResponse.redirect(new URL("/", request.url))
+    console.log("Redirecting to dashboard:", dashboardUrl.toString())
+    return NextResponse.redirect(dashboardUrl)
   } catch (error) {
-    // Log the full error for debugging
     console.error("Strava callback error:", error)
 
     // Create error URL with message
@@ -44,7 +68,6 @@ async function stravaCallback(request: Request) {
     const errorUrl = new URL("/error", baseUrl)
     errorUrl.searchParams.set("message", error instanceof Error ? error.message : "An unexpected error occurred")
 
-    // Redirect to error page
     return NextResponse.redirect(errorUrl)
   }
 }

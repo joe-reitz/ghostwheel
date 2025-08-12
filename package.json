@@ -1,17 +1,21 @@
 {
-  "name": "my-project",
+  "name": "ghostwheel",
   "version": "1.0.0",
-  "license": "ISC",
-  "author": "",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "next build",
+    "dev": "next dev",
+    "lint": "next lint",
+    "start": "next start",
+    "vercel-build": "next build"
   },
   "dependencies": {
     "@ai-sdk/openai": "latest",
+    "@radix-ui/react-select": "^2.0.0",
+    "@radix-ui/react-slot": "^1.0.2",
     "@remix-run/react": "latest",
     "@sveltejs/kit": "latest",
     "@tremor/react": "latest",
-    "@types/react": "latest",
     "@vercel/analytics": "latest",
     "ai": "latest",
     "class-variance-authority": "^0.7.1",
@@ -33,7 +37,9 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "autoprefixer": "^10.4.20",
     "postcss": "^8.5",
+    "tailwindcss": "^3.4.17",
     "typescript": "^5"
   }
 }

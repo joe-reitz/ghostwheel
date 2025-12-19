@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { exchangeCodeForToken, getAthleteProfile } from "@/lib/strava"
 import { createOrUpdateUser } from "@/lib/db"
+import { createSession } from "@/lib/session"
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -32,6 +33,9 @@ export async function GET(request: Request) {
       refreshToken: tokenData.refresh_token,
       tokenExpiresAt: expiresAt
     })
+    
+    // Create session cookie
+    await createSession(athlete.id)
     
     // Redirect to dashboard
     return NextResponse.redirect(new URL('/dashboard', request.url))

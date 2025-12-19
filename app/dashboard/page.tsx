@@ -58,9 +58,8 @@ export default function Dashboard() {
     async function fetchData() {
       setLoading(true)
       try {
-        // TODO: Replace with actual user ID from auth
-        const userId = "YOUR_STRAVA_ID"
-        const response = await fetch(`/api/strava/activities?userId=${userId}&lookback=${lookback}&analyze=true`)
+        // No need to pass userId - it's in the session
+        const response = await fetch(`/api/strava/activities?lookback=${lookback}&analyze=false`)
         
         if (!response.ok) {
           throw new Error('Failed to fetch activities')

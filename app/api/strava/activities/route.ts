@@ -22,17 +22,16 @@ import { analyzeRide } from '@/lib/ai-coach';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const userId = searchParams.get('userId');
   const lookback = searchParams.get('lookback') || 'month';
   const analyze = searchParams.get('analyze') === 'true';
 
-  if (!userId) {
-    return NextResponse.json({ error: 'No userId provided' }, { status: 400 });
-  }
-
   try {
-    // Get user from database
-    const user = await getUserByStravaId(Number(userId));
+    // Get user from session
+    const { requireAuth } = await import('@/lib/session');
+    const sessionUser = await requireAuth();
+    
+    // Get full user data from database
+    const user = await getUserByStravaId(sessionUser.stravaId);
     
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });

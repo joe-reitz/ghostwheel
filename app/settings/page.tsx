@@ -194,12 +194,12 @@ export default function SettingsPage() {
                   <input
                     type="number"
                     step="0.1"
-                    value={settings.weight || ''}
-                    onChange={(e) => setSettings({...settings, weight: e.target.value ? Number(e.target.value) : undefined})}
-                    placeholder="75"
+                    value={settings.weight ? (settings.weight * 2.20462).toFixed(1) : ''}
+                    onChange={(e) => setSettings({...settings, weight: e.target.value ? Number(e.target.value) / 2.20462 : undefined})}
+                    placeholder="165"
                     className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:border-purple-500 focus:outline-none"
                   />
-                  <span className="text-gray-400 font-medium">kg</span>
+                  <span className="text-gray-400 font-medium">lbs</span>
                 </div>
               </div>
 
@@ -211,15 +211,15 @@ export default function SettingsPage() {
                   <input
                     type="number"
                     step="0.1"
-                    value={settings.bikeWeight || ''}
-                    onChange={(e) => setSettings({...settings, bikeWeight: e.target.value ? Number(e.target.value) : undefined})}
-                    placeholder="8"
+                    value={settings.bikeWeight ? (settings.bikeWeight * 2.20462).toFixed(1) : ''}
+                    onChange={(e) => setSettings({...settings, bikeWeight: e.target.value ? Number(e.target.value) / 2.20462 : undefined})}
+                    placeholder="18"
                     className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:border-purple-500 focus:outline-none"
                   />
-                  <span className="text-gray-400 font-medium">kg</span>
+                  <span className="text-gray-400 font-medium">lbs</span>
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
-                  💡 Typical road bikes: 7-10 kg
+                  💡 Typical road bikes: 15-22 lbs
                 </p>
               </div>
             </div>
@@ -247,9 +247,9 @@ export default function SettingsPage() {
                 {settings.bikeWeight && (
                   <div>
                     <div className="text-2xl font-bold text-blue-400">
-                      {(settings.weight + settings.bikeWeight).toFixed(1)}
+                      {((settings.weight + settings.bikeWeight) * 2.20462).toFixed(1)}
                     </div>
-                    <div className="text-sm text-gray-400">kg Total Weight</div>
+                    <div className="text-sm text-gray-400">lbs Total Weight</div>
                   </div>
                 )}
               </div>

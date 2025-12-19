@@ -85,6 +85,15 @@ export default function Dashboard() {
     fetchData()
   }, [lookback])
 
+  // Auto-sync on first load to get latest rides
+  useEffect(() => {
+    const hasAutoSynced = sessionStorage.getItem('dashboard_auto_synced')
+    if (!hasAutoSynced && !loading) {
+      sessionStorage.setItem('dashboard_auto_synced', 'true')
+      // Auto-sync will happen on first fetchData call
+    }
+  }, [])
+
   async function handleSync() {
     setSyncing(true)
     await fetchData()
@@ -126,7 +135,7 @@ export default function Dashboard() {
   
   const chartData = sortedActivities.map(a => ({
     date: new Date(a.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    distance: (a.distance / 1000).toFixed(1),
+    distance: (a.distance * 0.000621371).toFixed(1), // miles
     speed: (a.average_speed * 2.23694).toFixed(1), // mph
     elevation: a.total_elevation_gain,
     tss: a.tss?.toFixed(0) || 0,
@@ -134,6 +143,19 @@ export default function Dashboard() {
     hr: a.average_heartrate || 0,
     duration: a.moving_time / 3600 // hours
   }));
+
+  // Calculate period averages for display
+  const periodStats = {
+    avgSpeed: activities.length > 0 
+      ? (activities.reduce((sum, a) => sum + a.average_speed, 0) / activities.length * 2.23694).toFixed(1)
+      : '0',
+    avgPower: activities.filter(a => a.average_watts).length > 0
+      ? (activities.filter(a => a.average_watts).reduce((sum, a) => sum + (a.average_watts || 0), 0) / activities.filter(a => a.average_watts).length).toFixed(0)
+      : '0',
+    avgHR: activities.filter(a => a.average_heartrate).length > 0
+      ? (activities.filter(a => a.average_heartrate).reduce((sum, a) => sum + (a.average_heartrate || 0), 0) / activities.filter(a => a.average_heartrate).length).toFixed(0)
+      : '0'
+  };
 
   // Fitness chart data (CTL/ATL/TSB)
   const fitnessData = sortedActivities.map((a, idx) => ({
@@ -242,7 +264,12 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Distance & Speed Trend */}
           <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur">
-            <h3 className="text-xl font-bold mb-4">Distance & Speed Over Time</h3>
+            <h3 className="text-xl font-bold mb-4">
+              Distance & Speed Over Time
+              <span className="text-sm font-normal text-gray-400 ml-3">
+                Avg Speed: {periodStats.avgSpeed} mph
+              </span>
+            </h3>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -254,7 +281,7 @@ export default function Dashboard() {
                   labelStyle={{ color: '#F3F4F6' }}
                 />
                 <Legend />
-                <Line yAxisId="left" type="monotone" dataKey="distance" stroke="#8B5CF6" strokeWidth={2} name="Distance (km)" />
+                <Line yAxisId="left" type="monotone" dataKey="distance" stroke="#8B5CF6" strokeWidth={2} name="Distance (mi)" />
                 <Line yAxisId="right" type="monotone" dataKey="speed" stroke="#3B82F6" strokeWidth={2} name="Avg Speed (mph)" />
               </LineChart>
             </ResponsiveContainer>
@@ -262,7 +289,12 @@ export default function Dashboard() {
 
           {/* Power & HR */}
           <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur">
-            <h3 className="text-xl font-bold mb-4">Power & Heart Rate</h3>
+            <h3 className="text-xl font-bold mb-4">
+              Power & Heart Rate
+              <span className="text-sm font-normal text-gray-400 ml-3">
+                Avg Power: {periodStats.avgPower}W | Avg HR: {periodStats.avgHR} bpm
+              </span>
+            </h3>
             <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={chartData}>
                 <defs>
@@ -365,7 +397,7 @@ export default function Dashboard() {
         <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur">
           <h3 className="text-xl font-bold mb-4">Recent Rides</h3>
           <div className="space-y-4">
-            {activities.slice(0, 5).reverse().map((activity) => (
+            {[...activities].sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime()).slice(0, 5).map((activity) => (
               <div key={activity.id} className="bg-gray-700/50 rounded-lg p-4 hover:bg-gray-700 transition-colors">
                 <div className="flex justify-between items-start mb-2">
                   <div>

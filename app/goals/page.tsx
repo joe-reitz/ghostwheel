@@ -35,28 +35,44 @@ export default function GoalsPage() {
 
   async function fetchGoals() {
     try {
-      // TODO: Implement goals API endpoint
-      // const userId = "YOUR_STRAVA_ID"
-      // const response = await fetch(`/api/goals?userId=${userId}`)
-      // const data = await response.json()
-      // setGoals(data.goals || [])
+      // Fetch actual goals from database
+      const response = await fetch('/api/goals')
       
-      // Mock data
+      if (response.ok) {
+        const data = await response.json()
+        setGoals(data.goals || [])
+      } else {
+        // If API fails, show default STP goal
+        setGoals([
+          {
+            id: 1,
+            name: "Seattle to Portland One Day",
+            type: "race",
+            target_value: 207,
+            target_date: "2026-07-11",
+            description: "Complete STP in one day at 17+ mph average",
+            status: "active",
+            progress: 35,
+            created_at: new Date().toISOString()
+          }
+        ])
+      }
+    } catch (error) {
+      console.error('Error fetching goals:', error)
+      // Show default STP goal on error
       setGoals([
         {
           id: 1,
           name: "Seattle to Portland One Day",
           type: "race",
-          target_value: 204,
-          target_date: "2025-07-12",
+          target_value: 207,
+          target_date: "2026-07-11",
           description: "Complete STP in one day at 17+ mph average",
           status: "active",
           progress: 35,
           created_at: new Date().toISOString()
         }
       ])
-    } catch (error) {
-      console.error('Error fetching goals:', error)
     } finally {
       setLoading(false)
     }

@@ -1,365 +1,402 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useSearchParams } from "next/navigation"
-import { Card, Title, Text, Metric, AreaChart, BarChart, DonutChart, LineChart, Grid, Flex, Badge } from "@tremor/react"
-import { Loader2, TrendingUp, TrendingDown, ActivityIcon, Heart, Zap, Mountain } from "lucide-react"
-import { formatDuration, metersToMiles } from "@/lib/utils"
-import dynamic from "next/dynamic"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Nav } from "@/components/nav"
+import { 
+  LineChart, Line, AreaChart, Area, BarChart, Bar, 
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell
+} from 'recharts'
+import { Calendar, TrendingUp, Zap, Heart, Target, Activity } from 'lucide-react'
 
-// Dynamically import AIAnalysis
-const AIAnalysis = dynamic(() => import("@/components/AIAnalysis"), { ssr: false })
-
-interface StravaActivity {
+interface ActivityData {
   id: number
   name: string
+  start_date: string
   distance: number
   moving_time: number
   total_elevation_gain: number
   average_speed: number
-  max_speed: number
-  average_heartrate?: number
-  max_heartrate?: number
   average_watts?: number
-  weighted_average_watts?: number
-  normalized_power?: number
-  average_cadence?: number
-  start_date: string
-  suffer_score?: number
-  heartrate?: number[]
-  kilojoules?: number
-  elev_high?: number
-  elev_low?: number
+  weighted_power?: number
+  average_heartrate?: number
+  tss?: number
+  intensity_factor?: number
   type: string
+  aiAnalysis?: {
+    analysis: string
+    feedback: string
+    recommendations: string[]
+  }
 }
 
-// Calculate power zones (assuming FTP of 250W for demo - in real app this would be user-configurable)
-const calculatePowerZones = (watts: number, ftp = 250) => {
-  const percentage = (watts / ftp) * 100
-  if (percentage < 55) return { zone: 1, color: "gray", name: "Active Recovery" }
-  if (percentage < 75) return { zone: 2, color: "blue", name: "Endurance" }
-  if (percentage < 90) return { zone: 3, color: "green", name: "Tempo" }
-  if (percentage < 105) return { zone: 4, color: "yellow", name: "Lactate Threshold" }
-  if (percentage < 120) return { zone: 5, color: "orange", name: "VO2 Max" }
-  return { zone: 6, color: "red", name: "Neuromuscular" }
+interface DashboardSummary {
+  totalRides: number
+  totalDistance: number
+  totalTime: number
+  totalTSS: number
+  ctl: number
+  atl: number
+  tsb: number
 }
 
-// Calculate heart rate zones (assuming max HR of 190 for demo)
-const calculateHRZones = (hr: number, maxHR = 190) => {
-  const percentage = (hr / maxHR) * 100
-  if (percentage < 60) return { zone: 1, color: "gray", name: "Recovery" }
-  if (percentage < 70) return { zone: 2, color: "blue", name: "Aerobic Base" }
-  if (percentage < 80) return { zone: 3, color: "green", name: "Aerobic" }
-  if (percentage < 90) return { zone: 4, color: "yellow", name: "Lactate Threshold" }
-  return { zone: 5, color: "red", name: "VO2 Max" }
-}
+const lookbackOptions = [
+  { value: "week", label: "Last Week" },
+  { value: "month", label: "Last Month" },
+  { value: "quarter", label: "Last Quarter" },
+  { value: "year", label: "Last Year" },
+]
 
 export default function Dashboard() {
-  const [activities, setActivities] = useState<StravaActivity[]>([])
-  const [selectedActivityId, setSelectedActivityId] = useState<number | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [lookback, setLookback] = useState("month")
+  const [activities, setActivities] = useState<ActivityData[]>([])
+  const [summary, setSummary] = useState<DashboardSummary | null>(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const searchParams = useSearchParams()
 
   useEffect(() => {
-    const fetchActivities = async () => {
-      const token = searchParams?.get("token")
-      if (!token) {
-        setError("No access token provided")
-        setIsLoading(false)
-        return
-      }
-
+    async function fetchData() {
+      setLoading(true)
       try {
-        const response = await fetch("https://www.strava.com/api/v3/athlete/activities?per_page=20", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
+        // TODO: Replace with actual user ID from auth
+        const userId = "YOUR_STRAVA_ID"
+        const response = await fetch(`/api/strava/activities?userId=${userId}&lookback=${lookback}&analyze=true`)
+        
         if (!response.ok) {
-          throw new Error("Failed to fetch activities")
+          throw new Error('Failed to fetch activities')
         }
-
+        
         const data = await response.json()
-        if (data.length > 0) {
-          setActivities(data)
-          setSelectedActivityId(data[0].id)
-        } else {
-          setError("No activities found")
-        }
-      } catch (err) {
-        setError("Error fetching activities")
-        console.error(err)
+        setActivities(data.activities || [])
+        setSummary(data.summary || null)
+      } catch (err: any) {
+        setError(err.message)
       } finally {
-        setIsLoading(false)
+        setLoading(false)
       }
     }
 
-    fetchActivities()
-  }, [searchParams])
+    fetchData()
+  }, [lookback])
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="min-h-screen bg-gradient-dark">
+        <Nav />
+        <main className="mx-auto max-w-7xl px-4 py-8">
+          <div className="flex items-center justify-center h-96">
+            <div className="text-white text-xl">Loading your rides...</div>
+          </div>
+        </main>
       </div>
     )
   }
 
-  if (error || activities.length === 0) {
+  if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Text className="text-destructive">{error || "No activity data available"}</Text>
+      <div className="min-h-screen bg-gradient-dark">
+        <Nav />
+        <main className="mx-auto max-w-7xl px-4 py-8">
+          <div className="bg-red-500/10 border border-red-500 rounded-lg p-6 text-red-200">
+            <h2 className="text-xl font-bold mb-2">Error loading data</h2>
+            <p>{error}</p>
+          </div>
+        </main>
       </div>
     )
   }
 
-  const activity = activities.find((a) => a.id === selectedActivityId) || activities[0]
-  const previousActivity = activities[1] // For comparison
+  // Process data for charts
+  const chartData = activities.map(a => ({
+    date: new Date(a.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    distance: (a.distance / 1000).toFixed(1),
+    speed: (a.average_speed * 2.23694).toFixed(1), // mph
+    elevation: a.total_elevation_gain,
+    tss: a.tss?.toFixed(0) || 0,
+    power: a.average_watts || 0,
+    hr: a.average_heartrate || 0,
+    duration: a.moving_time / 3600 // hours
+  })).reverse()
 
-  // Calculate key metrics
-  const avgPower = activity.average_watts || activity.weighted_average_watts || 0
-  const powerZone = calculatePowerZones(avgPower)
-  const hrZone = calculateHRZones(activity.average_heartrate || 0)
+  // Fitness chart data (CTL/ATL/TSB)
+  const fitnessData = activities.map((a, idx) => ({
+    date: new Date(a.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    // This is simplified - you'd calculate cumulative CTL/ATL
+    fitness: summary ? summary.ctl : 0,
+    fatigue: summary ? summary.atl : 0,
+    form: summary ? summary.tsb : 0
+  })).reverse()
 
-  // Performance comparison with previous ride
-  const distanceChange = previousActivity
-    ? ((activity.distance - previousActivity.distance) / previousActivity.distance) * 100
-    : 0
-  const speedChange = previousActivity
-    ? ((activity.average_speed - previousActivity.average_speed) / previousActivity.average_speed) * 100
-    : 0
-
-  // Create elevation profile data (simulated - in real app would come from detailed activity data)
-  const elevationData = Array.from({ length: 20 }, (_, i) => ({
-    distance: (((activity.distance / 1000) * i) / 19).toFixed(1),
-    elevation: Math.sin(i * 0.3) * (activity.total_elevation_gain * 0.3) + activity.total_elevation_gain * 0.5,
-  }))
-
-  // Power distribution data (simulated)
-  const powerDistribution = [
-    { zone: "Z1 (Recovery)", time: 25, color: "gray" },
-    { zone: "Z2 (Endurance)", time: 35, color: "blue" },
-    { zone: "Z3 (Tempo)", time: 20, color: "green" },
-    { zone: "Z4 (Threshold)", time: 15, color: "yellow" },
-    { zone: "Z5 (VO2)", time: 5, color: "orange" },
+  // Performance radar data
+  const avgSpeed = activities.reduce((sum, a) => sum + a.average_speed, 0) / activities.length * 2.23694
+  const avgPower = activities.filter(a => a.average_watts).reduce((sum, a) => sum + (a.average_watts || 0), 0) / activities.filter(a => a.average_watts).length
+  const avgHR = activities.filter(a => a.average_heartrate).reduce((sum, a) => sum + (a.average_heartrate || 0), 0) / activities.filter(a => a.average_heartrate).length
+  
+  const radarData = [
+    { metric: 'Speed', value: Math.min((avgSpeed / 25) * 100, 100), fullMark: 100 },
+    { metric: 'Power', value: avgPower ? Math.min((avgPower / 250) * 100, 100) : 50, fullMark: 100 },
+    { metric: 'Endurance', value: Math.min((summary?.totalDistance || 0) / 50000 * 100, 100), fullMark: 100 },
+    { metric: 'Consistency', value: Math.min((activities.length / 20) * 100, 100), fullMark: 100 },
+    { metric: 'Form', value: summary?.tsb ? Math.min(Math.max((summary.tsb + 20) / 40 * 100, 0), 100) : 50, fullMark: 100 },
   ]
 
-  // Recent performance trend
-  const performanceData = activities
-    .slice(0, 10)
-    .reverse()
-    .map((act, index) => ({
-      ride: `Ride ${index + 1}`,
-      power: act.average_watts || act.weighted_average_watts || 0,
-      speed: act.average_speed * 2.237, // Convert to mph
-      distance: act.distance / 1609.34, // Convert to miles
-    }))
-
   return (
-    <main className="p-4 mx-auto max-w-7xl space-y-6">
-      {/* Header Section */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <ActivityIcon className="w-6 h-6 text-primary" />
-            <Title className="text-2xl font-bold text-primary">Ride Analysis Dashboard</Title>
+    <div className="min-h-screen bg-gradient-dark text-white">
+      <Nav />
+      
+      <main className="mx-auto max-w-7xl px-4 py-8">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-4xl font-bold mb-2">Training Dashboard</h1>
+            <p className="text-gray-400">Your path to STP domination 🚴‍♂️</p>
           </div>
-          <Text className="text-muted-foreground">{new Date(activity.start_date).toLocaleString()}</Text>
-          <a
-            href={`https://www.strava.com/activities/${activity.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[#FC4C02] hover:underline font-medium inline-flex items-center gap-1"
+          <select
+            value={lookback}
+            onChange={(e) => setLookback(e.target.value)}
+            className="bg-gray-800 text-white rounded-lg px-4 py-2 border border-gray-700 focus:border-purple-500 focus:outline-none"
           >
-            View on Strava →
-          </a>
-        </div>
-        <Select value={selectedActivityId?.toString()} onValueChange={(value) => setSelectedActivityId(Number(value))}>
-          <SelectTrigger className="w-[320px]">
-            <SelectValue placeholder="Select a ride" />
-          </SelectTrigger>
-          <SelectContent>
-            {activities.map((a) => (
-              <SelectItem key={a.id} value={a.id.toString()}>
-                {a.name} - {new Date(a.start_date).toLocaleDateString()}
-              </SelectItem>
+            {lookbackOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
             ))}
-          </SelectContent>
-        </Select>
-      </div>
+          </select>
+        </div>
 
-      {/* Key Metrics Grid */}
-      <Grid numItems={2} numItemsSm={3} numItemsLg={6} className="gap-4">
-        <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/10 border-blue-500/20">
-          <Flex alignItems="start">
-            <div>
-              <Text className="text-blue-400">Distance</Text>
-              <Metric className="text-white">{metersToMiles(activity.distance).toFixed(1)} mi</Metric>
-              {distanceChange !== 0 && (
-                <Flex className="mt-2" justifyContent="start">
-                  {distanceChange > 0 ? (
-                    <TrendingUp className="w-4 h-4 text-green-400" />
-                  ) : (
-                    <TrendingDown className="w-4 h-4 text-red-400" />
+        {/* KPI Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="bg-gradient-to-br from-purple-500/20 to-purple-700/20 border border-purple-500/30 rounded-xl p-6 hover:scale-105 transition-transform">
+            <div className="flex items-center justify-between mb-2">
+              <Activity className="text-purple-400" size={24} />
+              <span className="text-sm text-gray-400">{lookback}</span>
+            </div>
+            <div className="text-3xl font-bold mb-1">{activities.length}</div>
+            <div className="text-gray-400 text-sm">Total Rides</div>
+          </div>
+
+          <div className="bg-gradient-to-br from-blue-500/20 to-blue-700/20 border border-blue-500/30 rounded-xl p-6 hover:scale-105 transition-transform">
+            <div className="flex items-center justify-between mb-2">
+              <TrendingUp className="text-blue-400" size={24} />
+              <span className="text-sm text-gray-400">miles</span>
+            </div>
+            <div className="text-3xl font-bold mb-1">
+              {summary ? (summary.totalDistance * 0.000621371).toFixed(0) : 0}
+            </div>
+            <div className="text-gray-400 text-sm">Distance</div>
+          </div>
+
+          <div className="bg-gradient-to-br from-orange-500/20 to-orange-700/20 border border-orange-500/30 rounded-xl p-6 hover:scale-105 transition-transform">
+            <div className="flex items-center justify-between mb-2">
+              <Zap className="text-orange-400" size={24} />
+              <span className="text-sm text-gray-400">TSS</span>
+            </div>
+            <div className="text-3xl font-bold mb-1">
+              {summary?.totalTSS?.toFixed(0) || 0}
+            </div>
+            <div className="text-gray-400 text-sm">Training Load</div>
+          </div>
+
+          <div className="bg-gradient-to-br from-green-500/20 to-green-700/20 border border-green-500/30 rounded-xl p-6 hover:scale-105 transition-transform">
+            <div className="flex items-center justify-between mb-2">
+              <Target className="text-green-400" size={24} />
+              <span className={`text-sm ${summary && summary.tsb > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {summary && summary.tsb > 0 ? 'Fresh' : 'Fatigued'}
+              </span>
+            </div>
+            <div className="text-3xl font-bold mb-1">
+              {summary?.tsb?.toFixed(0) || 0}
+            </div>
+            <div className="text-gray-400 text-sm">Form (TSB)</div>
+          </div>
+        </div>
+
+        {/* Charts Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Distance & Speed Trend */}
+          <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur">
+            <h3 className="text-xl font-bold mb-4">Distance & Speed Over Time</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis dataKey="date" stroke="#9CA3AF" />
+                <YAxis yAxisId="left" stroke="#8B5CF6" />
+                <YAxis yAxisId="right" orientation="right" stroke="#3B82F6" />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                  labelStyle={{ color: '#F3F4F6' }}
+                />
+                <Legend />
+                <Line yAxisId="left" type="monotone" dataKey="distance" stroke="#8B5CF6" strokeWidth={2} name="Distance (km)" />
+                <Line yAxisId="right" type="monotone" dataKey="speed" stroke="#3B82F6" strokeWidth={2} name="Avg Speed (mph)" />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Power & HR */}
+          <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur">
+            <h3 className="text-xl font-bold mb-4">Power & Heart Rate</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorPower" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#F59E0B" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorHR" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#EF4444" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#EF4444" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis dataKey="date" stroke="#9CA3AF" />
+                <YAxis yAxisId="left" stroke="#F59E0B" />
+                <YAxis yAxisId="right" orientation="right" stroke="#EF4444" />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                  labelStyle={{ color: '#F3F4F6' }}
+                />
+                <Legend />
+                <Area yAxisId="left" type="monotone" dataKey="power" stroke="#F59E0B" fillOpacity={1} fill="url(#colorPower)" name="Avg Power (W)" />
+                <Area yAxisId="right" type="monotone" dataKey="hr" stroke="#EF4444" fillOpacity={1} fill="url(#colorHR)" name="Avg HR (bpm)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Training Load (TSS) */}
+          <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur">
+            <h3 className="text-xl font-bold mb-4">Training Stress Score</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis dataKey="date" stroke="#9CA3AF" />
+                <YAxis stroke="#9CA3AF" />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                  labelStyle={{ color: '#F3F4F6' }}
+                />
+                <Bar dataKey="tss" name="TSS" radius={[8, 8, 0, 0]}>
+                  {chartData.map((entry, index) => {
+                    const tss = Number(entry.tss)
+                    const color = tss > 150 ? '#EF4444' : tss > 100 ? '#F59E0B' : '#10B981'
+                    return <Cell key={`cell-${index}`} fill={color} />
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <div className="flex justify-center gap-4 mt-4 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-green-500 rounded"></div>
+                <span className="text-gray-400">&lt;100 Easy</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-orange-500 rounded"></div>
+                <span className="text-gray-400">100-150 Moderate</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-red-500 rounded"></div>
+                <span className="text-gray-400">&gt;150 Hard</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Performance Radar */}
+          <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur">
+            <h3 className="text-xl font-bold mb-4">Performance Profile</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <RadarChart data={radarData}>
+                <PolarGrid stroke="#374151" />
+                <PolarAngleAxis dataKey="metric" stroke="#9CA3AF" />
+                <PolarRadiusAxis angle={90} domain={[0, 100]} stroke="#9CA3AF" />
+                <Radar name="Current" dataKey="value" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.6} />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Fitness/Fatigue/Form Chart */}
+        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur mb-8">
+          <h3 className="text-xl font-bold mb-4">Fitness, Fatigue & Form (CTL/ATL/TSB)</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={fitnessData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis dataKey="date" stroke="#9CA3AF" />
+              <YAxis stroke="#9CA3AF" />
+              <Tooltip 
+                contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                labelStyle={{ color: '#F3F4F6' }}
+              />
+              <Legend />
+              <Line type="monotone" dataKey="fitness" stroke="#3B82F6" strokeWidth={3} name="Fitness (CTL)" />
+              <Line type="monotone" dataKey="fatigue" stroke="#EF4444" strokeWidth={3} name="Fatigue (ATL)" />
+              <Line type="monotone" dataKey="form" stroke="#10B981" strokeWidth={3} name="Form (TSB)" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Recent Rides */}
+        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur">
+          <h3 className="text-xl font-bold mb-4">Recent Rides</h3>
+          <div className="space-y-4">
+            {activities.slice(0, 5).map((activity) => (
+              <div key={activity.id} className="bg-gray-700/50 rounded-lg p-4 hover:bg-gray-700 transition-colors">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h4 className="font-bold text-lg">{activity.name}</h4>
+                    <p className="text-gray-400 text-sm">
+                      {new Date(activity.start_date).toLocaleDateString('en-US', { 
+                        weekday: 'short', 
+                        month: 'short', 
+                        day: 'numeric' 
+                      })}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-purple-400">
+                      {(activity.distance * 0.000621371).toFixed(1)} mi
+                    </div>
+                    <div className="text-sm text-gray-400">
+                      {(activity.average_speed * 2.23694).toFixed(1)} mph
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-400">Time:</span>
+                    <div className="font-semibold">
+                      {Math.floor(activity.moving_time / 3600)}h {Math.floor((activity.moving_time % 3600) / 60)}m
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Elevation:</span>
+                    <div className="font-semibold">{activity.total_elevation_gain}m</div>
+                  </div>
+                  {activity.average_watts && (
+                    <div>
+                      <span className="text-gray-400">Avg Power:</span>
+                      <div className="font-semibold">{activity.average_watts}W</div>
+                    </div>
                   )}
-                  <Text className={distanceChange > 0 ? "text-green-400" : "text-red-400"}>
-                    {Math.abs(distanceChange).toFixed(1)}%
-                  </Text>
-                </Flex>
-              )}
-            </div>
-          </Flex>
-        </Card>
+                  {activity.tss && (
+                    <div>
+                      <span className="text-gray-400">TSS:</span>
+                      <div className="font-semibold">{activity.tss.toFixed(0)}</div>
+                    </div>
+                  )}
+                </div>
 
-        <Card className="bg-gradient-to-br from-green-500/10 to-green-600/10 border-green-500/20">
-          <Flex alignItems="start">
-            <div>
-              <Text className="text-green-400">Duration</Text>
-              <Metric className="text-white">{formatDuration(activity.moving_time)}</Metric>
-              <Text className="text-green-300 text-sm mt-1">{(activity.average_speed * 2.237).toFixed(1)} mph avg</Text>
-            </div>
-          </Flex>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-purple-500/10 to-purple-600/10 border-purple-500/20">
-          <Flex alignItems="start">
-            <div className="flex items-center gap-2">
-              <Mountain className="w-4 h-4 text-purple-400" />
-              <Text className="text-purple-400">Elevation</Text>
-            </div>
-            <Metric className="text-white">{(activity.total_elevation_gain * 3.28084).toFixed(0)} ft</Metric>
-            <Text className="text-purple-300 text-sm mt-1">
-              {((activity.total_elevation_gain / (activity.distance / 1000)) * 100).toFixed(1)}% grade avg
-            </Text>
-          </Flex>
-        </Card>
-
-        {activity.average_heartrate && (
-          <Card className="bg-gradient-to-br from-red-500/10 to-red-600/10 border-red-500/20">
-            <Flex alignItems="start">
-              <div className="flex items-center gap-2">
-                <Heart className="w-4 h-4 text-red-400" />
-                <Text className="text-red-400">Heart Rate</Text>
+                {activity.aiAnalysis && (
+                  <div className="mt-4 p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+                    <div className="text-sm text-purple-300 font-semibold mb-1">🤖 AI Coach:</div>
+                    <p className="text-sm text-gray-300">{activity.aiAnalysis.analysis}</p>
+                  </div>
+                )}
               </div>
-              <Metric className="text-white">{Math.round(activity.average_heartrate)} bpm</Metric>
-              <Badge color={hrZone.color} size="sm" className="mt-1">
-                Zone {hrZone.zone} - {hrZone.name}
-              </Badge>
-            </Flex>
-          </Card>
-        )}
-
-        {avgPower > 0 && (
-          <Card className="bg-gradient-to-br from-yellow-500/10 to-yellow-600/10 border-yellow-500/20">
-            <Flex alignItems="start">
-              <div className="flex items-center gap-2">
-                <Zap className="w-4 h-4 text-yellow-400" />
-                <Text className="text-yellow-400">Power</Text>
-              </div>
-              <Metric className="text-white">{Math.round(avgPower)} W</Metric>
-              <Badge color={powerZone.color} size="sm" className="mt-1">
-                Zone {powerZone.zone} - {powerZone.name}
-              </Badge>
-            </Flex>
-          </Card>
-        )}
-
-        {activity.suffer_score && (
-          <Card className="bg-gradient-to-br from-orange-500/10 to-orange-600/10 border-orange-500/20">
-            <Flex alignItems="start">
-              <div>
-                <Text className="text-orange-400">Training Load</Text>
-                <Metric className="text-white">{activity.suffer_score}</Metric>
-                <Text className="text-orange-300 text-sm mt-1">Relative Effort</Text>
-              </div>
-            </Flex>
-          </Card>
-        )}
-      </Grid>
-
-      {/* Charts Section */}
-      <Grid numItems={1} numItemsLg={2} className="gap-6">
-        {/* Elevation Profile */}
-        <Card className="bg-secondary/50 border-primary/20">
-          <Title className="text-primary mb-4">Elevation Profile</Title>
-          <AreaChart
-            className="h-64"
-            data={elevationData}
-            index="distance"
-            categories={["elevation"]}
-            colors={["emerald"]}
-            valueFormatter={(value) => `${Math.round(value)} ft`}
-            yAxisWidth={60}
-            showAnimation={true}
-            curveType="natural"
-          />
-        </Card>
-
-        {/* Performance Trends */}
-        <Card className="bg-secondary/50 border-primary/20">
-          <Title className="text-primary mb-4">Recent Performance Trend</Title>
-          <LineChart
-            className="h-64"
-            data={performanceData}
-            index="ride"
-            categories={["power", "speed"]}
-            colors={["yellow", "blue"]}
-            valueFormatter={(value) => `${Math.round(value)}`}
-            yAxisWidth={60}
-            showAnimation={true}
-          />
-        </Card>
-      </Grid>
-
-      {/* Power and Heart Rate Analysis */}
-      <Grid numItems={1} numItemsLg={2} className="gap-6">
-        {avgPower > 0 && (
-          <Card className="bg-secondary/50 border-primary/20">
-            <Title className="text-primary mb-4">Power Zone Distribution</Title>
-            <DonutChart
-              className="h-64"
-              data={powerDistribution}
-              category="time"
-              index="zone"
-              colors={["gray", "blue", "green", "yellow", "orange"]}
-              valueFormatter={(value) => `${value}%`}
-              showAnimation={true}
-            />
-          </Card>
-        )}
-
-        {/* Weekly Training Load */}
-        <Card className="bg-secondary/50 border-primary/20">
-          <Title className="text-primary mb-4">Weekly Training Load</Title>
-          <BarChart
-            className="h-64"
-            data={activities
-              .slice(0, 7)
-              .reverse()
-              .map((act, i) => ({
-                day: new Date(act.start_date).toLocaleDateString("en", { weekday: "short" }),
-                load: act.suffer_score || 0,
-                distance: act.distance / 1609.34,
-              }))}
-            index="day"
-            categories={["load"]}
-            colors={["purple"]}
-            valueFormatter={(value) => `${Math.round(value)}`}
-            yAxisWidth={60}
-            showAnimation={true}
-          />
-        </Card>
-      </Grid>
-
-      {/* AI Analysis */}
-      {activity && (
-        <Card className="bg-secondary/50 border-primary/20">
-          <AIAnalysis activity={activity} />
-        </Card>
-      )}
-    </main>
+            ))}
+          </div>
+        </div>
+      </main>
+    </div>
   )
 }

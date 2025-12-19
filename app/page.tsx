@@ -1,43 +1,60 @@
-import Link from "next/link"
 import Image from "next/image"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Nav } from "@/components/nav"
 
 export default function Home() {
-  const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/strava/callback`
-  const stravaAuthUrl = `https://www.strava.com/oauth/authorize?client_id=${process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=activity:read_all`
-
   return (
-    <div className="container mx-auto flex flex-col items-center p-4 pt-20">
-      <div className="mb-8 relative">
-        <div className="w-32 h-32 relative">
-          <Image
-            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/logo-BSnMsjYZgunb8LwLIhI9RvyP2NSWRI.png"
-            alt="GhostWheel Logo"
-            width={128}
-            height={128}
-            className="animate-float"
-          />
+    <div className="min-h-screen bg-gradient-dark">
+      <Nav />
+      <main className="mx-auto max-w-7xl px-4 py-16 text-center">
+        <div className="mb-8">
+          <div className="float inline-block">
+            <Image
+              src="/images/logo.png"
+              alt="GhostWheel Logo"
+              width={100}
+              height={100}
+              className="mx-auto"
+            />
+          </div>
         </div>
-        <div className="absolute -inset-4 bg-purple-500/20 rounded-full blur-xl" />
-      </div>
-
-      <h1 className="text-4xl font-bold mb-4 text-center">
-        <span className="text-white">Welcome to</span>{" "}
-        <span className="bg-clip-text text-transparent bg-gradient-to-b from-purple-400 to-purple-600">GhostWheel</span>
-      </h1>
-
-      <p className="text-gray-400 mb-8 text-center max-w-md">
-        Connect your Strava account to get AI-powered insights and analysis for your rides
-      </p>
-
-      <Link href={stravaAuthUrl} className="hover:opacity-90 transition-opacity">
-        <Image
-          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/btn_strava_connectwith_orange@2x-JDIgT5R9OIQjdQCpLAPgkPrx7y3UUx.png"
-          alt="Connect with Strava"
-          width={195}
-          height={48}
-          priority
-        />
-      </Link>
+        <h1 className="mb-4 text-6xl font-bold">
+          <span className="text-[#A855F7]">Ghost</span>
+          <span className="text-white">Wheel</span>
+        </h1>
+        <p className="mx-auto mb-12 max-w-2xl text-lg text-gray-400">
+          Train smarter, ride faster. GhostWheel combines AI coaching with detailed analytics to help you achieve your
+          cycling goals.
+        </p>
+        <div className="mb-20 flex justify-center">
+          <Link href="/api/auth/strava">
+            <Button className="bg-[#FC4C02] hover:bg-[#FC4C02]/90 text-white flex items-center gap-2">
+              <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current">
+                <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h3.066" />
+              </svg>
+              Connect Strava
+            </Button>
+          </Link>
+        </div>
+        <div className="grid gap-8 md:grid-cols-3">
+          <div className="rounded-lg p-6">
+            <h2 className="mb-4 text-2xl font-bold text-white">Set Personal Goals</h2>
+            <p className="text-gray-400">
+              Choose from a library of common cycling goals that adapt with your progress.
+            </p>
+          </div>
+          <div className="rounded-lg p-6">
+            <h2 className="mb-4 text-2xl font-bold text-white">Smart Training Plans</h2>
+            <p className="text-gray-400">AI-powered training plans that adapt to your progress and goals.</p>
+          </div>
+          <div className="rounded-lg p-6">
+            <h2 className="mb-4 text-2xl font-bold text-white">Detailed Analytics</h2>
+            <p className="text-gray-400">Track your progress with comprehensive ride analytics and insights.</p>
+          </div>
+        </div>
+      </main>
     </div>
   )
 }
+

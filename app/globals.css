@@ -2,43 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: 240 10% 3.9%;
-  --foreground: 0 0% 98%;
-  --card: 240 10% 3.9%;
-  --card-foreground: 0 0% 98%;
-  --popover: 240 10% 3.9%;
-  --popover-foreground: 0 0% 98%;
-  --primary: 267 100% 65%;
-  --primary-foreground: 0 0% 98%;
-  --secondary: 240 3.7% 15.9%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 240 3.7% 15.9%;
-  --muted-foreground: 240 5% 64.9%;
-  --accent: 240 3.7% 15.9%;
-  --accent-foreground: 0 0% 98%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 240 3.7% 15.9%;
-  --input: 240 3.7% 15.9%;
-  --ring: 267 100% 65%;
-}
-
-.bg-gradient {
-  background: linear-gradient(180deg, hsl(240 10% 10%) 0%, hsl(240 10% 3.9%) 100%);
-  @apply text-foreground;
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-}
-
-/* Add a floating animation for the logo */
 @keyframes float {
   0% {
     transform: translateY(0px);
@@ -51,37 +14,11 @@
   }
 }
 
-.animate-float {
+.float {
   animation: float 3s ease-in-out infinite;
 }
 
-/* Chart styles */
-.tremor-DonutChart {
-  --donut-chart-hole-color: transparent;
+.bg-gradient-dark {
+  background: linear-gradient(180deg, #252525 60%, #000000 100%);
 }
 
-.tremor-DonutChart text {
-  fill: white !important;
-  font-weight: bold;
-}
-
-.tremor-Legend-text {
-  color: white !important;
-}
-
-.tremor-DonutChart path {
-  stroke-width: 10px;
-}
-
-/* Ensure tooltips are visible on dark backgrounds */
-.tremor-Tooltip {
-  --tooltip-background: hsl(var(--popover)) !important;
-  --tooltip-color: hsl(var(--popover-foreground)) !important;
-  border: 1px solid hsl(var(--border)) !important;
-}
-
-/* Make chart text white */
-.tremor-AreaChart text {
-  text: white !important;
-  fill: white !important;
-}

@@ -109,7 +109,13 @@ export default function Dashboard() {
   }
 
   // Process data for charts
-  const chartData = activities.map(a => ({
+  // Activities come from API in descending order (newest first)
+  // For time series charts, we want ascending order (oldest first, left to right)
+  const sortedActivities = [...activities].sort((a, b) => 
+    new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
+  );
+  
+  const chartData = sortedActivities.map(a => ({
     date: new Date(a.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     distance: (a.distance / 1000).toFixed(1),
     speed: (a.average_speed * 2.23694).toFixed(1), // mph
@@ -118,16 +124,16 @@ export default function Dashboard() {
     power: a.average_watts || 0,
     hr: a.average_heartrate || 0,
     duration: a.moving_time / 3600 // hours
-  })).reverse()
+  }));
 
   // Fitness chart data (CTL/ATL/TSB)
-  const fitnessData = activities.map((a, idx) => ({
+  const fitnessData = sortedActivities.map((a, idx) => ({
     date: new Date(a.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     // This is simplified - you'd calculate cumulative CTL/ATL
     fitness: summary ? summary.ctl : 0,
     fatigue: summary ? summary.atl : 0,
     form: summary ? summary.tsb : 0
-  })).reverse()
+  }));
 
   // Performance radar data
   const avgSpeed = activities.reduce((sum, a) => sum + a.average_speed, 0) / activities.length * 2.23694
@@ -340,7 +346,7 @@ export default function Dashboard() {
         <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur">
           <h3 className="text-xl font-bold mb-4">Recent Rides</h3>
           <div className="space-y-4">
-            {activities.slice(0, 5).map((activity) => (
+            {activities.slice(0, 5).reverse().map((activity) => (
               <div key={activity.id} className="bg-gray-700/50 rounded-lg p-4 hover:bg-gray-700 transition-colors">
                 <div className="flex justify-between items-start mb-2">
                   <div>

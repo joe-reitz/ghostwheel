@@ -229,3 +229,4 @@ CREATE TRIGGER update_goals_updated_at BEFORE UPDATE ON goals FOR EACH ROW EXECU
 CREATE TRIGGER update_training_plans_updated_at BEFORE UPDATE ON training_plans FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_planned_workouts_updated_at BEFORE UPDATE ON planned_workouts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+

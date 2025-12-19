@@ -57,18 +57,21 @@ export default function Dashboard() {
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
+      setError(null)
       try {
         // No need to pass userId - it's in the session
         const response = await fetch(`/api/strava/activities?lookback=${lookback}&analyze=false`)
         
         if (!response.ok) {
-          throw new Error('Failed to fetch activities')
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+          throw new Error(errorData.error || errorData.details || 'Failed to fetch activities')
         }
         
         const data = await response.json()
         setActivities(data.activities || [])
         setSummary(data.summary || null)
       } catch (err: any) {
+        console.error('Dashboard fetch error:', err)
         setError(err.message)
       } finally {
         setLoading(false)

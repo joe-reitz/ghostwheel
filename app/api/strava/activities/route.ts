@@ -34,8 +34,17 @@ export async function GET(request: Request) {
     const user = await getUserByStravaId(sessionUser.stravaId);
     
     if (!user) {
+      console.error('User not found in database:', sessionUser.stravaId);
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
+
+    // Log user data for debugging (without sensitive tokens)
+    console.log('User found:', {
+      id: user.id,
+      stravaId: user.strava_id,
+      hasFTP: !!user.ftp,
+      hasMaxHR: !!user.max_hr
+    });
 
     // Calculate date range based on lookback
     const now = new Date();
@@ -84,8 +93,8 @@ export async function GET(request: Request) {
       rides.map(async (activity: any) => {
         let calculatedMetrics: any = {};
 
-        // If activity has power data, calculate advanced metrics
-        if (activity.average_watts && user.ftp) {
+        // If activity has power data AND user has FTP configured, calculate advanced metrics
+        if (activity.average_watts && user.ftp && user.ftp > 0) {
           try {
             // Try to get detailed stream data for better calculations
             const streams = await getActivityStreams(accessToken, activity.id);
@@ -133,72 +142,77 @@ export async function GET(request: Request) {
         }
 
         // Store activity in database
-        const storedActivity = await createOrUpdateActivity({
-          userId: user.id,
-          stravaId: activity.id,
-          name: activity.name,
-          type: activity.type,
-          startDate: activity.start_date,
-          distance: activity.distance,
-          movingTime: activity.moving_time,
-          elapsedTime: activity.elapsed_time,
-          totalElevationGain: activity.total_elevation_gain,
-          averageSpeed: activity.average_speed,
-          maxSpeed: activity.max_speed,
-          averageWatts: activity.average_watts,
-          maxWatts: activity.max_watts,
-          weightedPower: calculatedMetrics.weightedPower,
-          averageHeartrate: activity.average_heartrate,
-          maxHeartrate: activity.max_heartrate,
-          averageCadence: activity.average_cadence,
-          maxCadence: activity.max_cadence,
-          kilojoules: activity.kilojoules,
-          deviceWatts: activity.device_watts,
-          hasHeartrate: activity.has_heartrate,
-          tss: calculatedMetrics.tss,
-          intensityFactor: calculatedMetrics.intensityFactor,
-          variabilityIndex: calculatedMetrics.variabilityIndex,
-          summaryPolyline: activity.map?.summary_polyline,
-          mapId: activity.map?.id
-        });
-
-        // If analyze flag is set and this is a recent ride, generate AI analysis
-        if (analyze && calculatedMetrics.tss) {
-          const rideData = {
+        try {
+          const storedActivity = await createOrUpdateActivity({
+            userId: user.id,
+            stravaId: activity.id,
             name: activity.name,
-            date: activity.start_date,
+            type: activity.type,
+            startDate: activity.start_date,
             distance: activity.distance,
             movingTime: activity.moving_time,
+            elapsedTime: activity.elapsed_time,
             totalElevationGain: activity.total_elevation_gain,
             averageSpeed: activity.average_speed,
+            maxSpeed: activity.max_speed,
             averageWatts: activity.average_watts,
-            normalizedPower: calculatedMetrics.weightedPower,
+            maxWatts: activity.max_watts,
+            weightedPower: calculatedMetrics.weightedPower,
             averageHeartrate: activity.average_heartrate,
             maxHeartrate: activity.max_heartrate,
+            averageCadence: activity.average_cadence,
+            maxCadence: activity.max_cadence,
+            kilojoules: activity.kilojoules,
+            deviceWatts: activity.device_watts,
+            hasHeartrate: activity.has_heartrate,
             tss: calculatedMetrics.tss,
             intensityFactor: calculatedMetrics.intensityFactor,
             variabilityIndex: calculatedMetrics.variabilityIndex,
-            type: activity.type
-          };
-
-          const aiAnalysis = await analyzeRide(rideData, {
-            ftp: user.ftp,
-            maxHR: user.max_hr,
-            recentActivities: []
+            summaryPolyline: activity.map?.summary_polyline,
+            mapId: activity.map?.id
           });
 
-          // Save AI analysis to database
-          await saveAIAnalysis(
-            storedActivity.id,
-            aiAnalysis.analysis,
-            aiAnalysis.feedback
-          );
+          // If analyze flag is set and this is a recent ride, generate AI analysis
+          if (analyze && calculatedMetrics.tss) {
+            const rideData = {
+              name: activity.name,
+              date: activity.start_date,
+              distance: activity.distance,
+              movingTime: activity.moving_time,
+              totalElevationGain: activity.total_elevation_gain,
+              averageSpeed: activity.average_speed,
+              averageWatts: activity.average_watts,
+              normalizedPower: calculatedMetrics.weightedPower,
+              averageHeartrate: activity.average_heartrate,
+              maxHeartrate: activity.max_heartrate,
+              tss: calculatedMetrics.tss,
+              intensityFactor: calculatedMetrics.intensityFactor,
+              variabilityIndex: calculatedMetrics.variabilityIndex,
+              type: activity.type
+            };
 
-          return {
-            ...activity,
-            ...calculatedMetrics,
-            aiAnalysis
-          };
+            const aiAnalysis = await analyzeRide(rideData, {
+              ftp: user.ftp,
+              maxHR: user.max_hr,
+              recentActivities: []
+            });
+
+            // Save AI analysis to database
+            await saveAIAnalysis(
+              storedActivity.id,
+              aiAnalysis.analysis,
+              aiAnalysis.feedback
+            );
+
+            return {
+              ...activity,
+              ...calculatedMetrics,
+              aiAnalysis
+            };
+          }
+        } catch (dbError) {
+          console.error(`Error storing activity ${activity.id}:`, dbError);
+          // Continue processing even if this activity fails to save
         }
 
         return {
@@ -229,7 +243,12 @@ export async function GET(request: Request) {
       currentATL = calculateATL(currentATL, tss);
       const tsb = calculateTSB(currentCTL, currentATL);
 
-      await updateTrainingLoad(user.id, new Date(date), tss, currentCTL, currentATL, tsb);
+      try {
+        await updateTrainingLoad(user.id, new Date(date), tss, currentCTL, currentATL, tsb);
+      } catch (tlError) {
+        console.error(`Error updating training load for ${date}:`, tlError);
+        // Continue processing even if this fails
+      }
     }
 
     return NextResponse.json({
@@ -247,8 +266,13 @@ export async function GET(request: Request) {
 
   } catch (error: any) {
     console.error('Error fetching Strava activities:', error);
+    console.error('Error stack:', error.stack);
     return NextResponse.json(
-      { error: 'Failed to fetch Strava activities', details: error.message }, 
+      { 
+        error: 'Failed to fetch Strava activities', 
+        details: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      }, 
       { status: 500 }
     );
   }

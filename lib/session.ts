@@ -92,9 +92,12 @@ export async function requireAuth(): Promise<SessionUser> {
   const user = await getSessionUser();
   
   if (!user) {
+    console.error('requireAuth: No user found in session');
     throw new Error('Unauthorized');
   }
   
+  console.log('requireAuth: User authenticated:', { stravaId: user.stravaId, id: user.id });
   return user;
 }
+
 

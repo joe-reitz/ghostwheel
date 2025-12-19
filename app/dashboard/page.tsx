@@ -7,7 +7,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell
 } from 'recharts'
-import { Calendar, TrendingUp, Zap, Heart, Target, Activity } from 'lucide-react'
+import { Calendar, TrendingUp, Zap, Heart, Target, Activity, RefreshCw } from 'lucide-react'
 
 interface ActivityData {
   id: number
@@ -52,15 +52,17 @@ export default function Dashboard() {
   const [activities, setActivities] = useState<ActivityData[]>([])
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    async function fetchData() {
-      setLoading(true)
-      setError(null)
-      try {
-        // No need to pass userId - it's in the session
-        const response = await fetch(`/api/strava/activities?lookback=${lookback}&analyze=false`)
+  async function fetchData() {
+    setLoading(true)
+    setError(null)
+    try {
+      // No need to pass userId - it's in the session
+      const response = await fetch(`/api/strava/activities?lookback=${lookback}&analyze=false`, {
+        cache: 'no-store' // Force fresh data from Strava
+      })
         
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
@@ -75,11 +77,18 @@ export default function Dashboard() {
         setError(err.message)
       } finally {
         setLoading(false)
+        setSyncing(false)
       }
     }
 
+  useEffect(() => {
     fetchData()
   }, [lookback])
+
+  async function handleSync() {
+    setSyncing(true)
+    await fetchData()
+  }
 
   if (loading) {
     return (
@@ -159,17 +168,27 @@ export default function Dashboard() {
             <h1 className="text-4xl font-bold mb-2">Training Dashboard</h1>
             <p className="text-gray-400">Your path to STP domination 🚴‍♂️</p>
           </div>
-          <select
-            value={lookback}
-            onChange={(e) => setLookback(e.target.value)}
-            className="bg-gray-800 text-white rounded-lg px-4 py-2 border border-gray-700 focus:border-purple-500 focus:outline-none"
-          >
-            {lookbackOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <div className="flex gap-3 items-center">
+            <button
+              onClick={handleSync}
+              disabled={syncing || loading}
+              className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+            >
+              <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+              {syncing ? 'Syncing...' : 'Sync from Strava'}
+            </button>
+            <select
+              value={lookback}
+              onChange={(e) => setLookback(e.target.value)}
+              className="bg-gray-800 text-white rounded-lg px-4 py-2 border border-gray-700 focus:border-purple-500 focus:outline-none"
+            >
+              {lookbackOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* KPI Cards */}

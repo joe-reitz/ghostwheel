@@ -1,6 +1,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import { Settings } from "lucide-react"
 
 export function Nav() {
   return (
@@ -33,6 +34,9 @@ export function Nav() {
           </div>
         </div>
         <div className="flex items-center space-x-4">
+          <Link href="/settings" className="text-white hover:text-white/80" title="Settings">
+            <Settings size={20} />
+          </Link>
           <Button variant="secondary" className="bg-[#7B3FB5] text-white hover:bg-[#6A36A0]">
             Connect Strava
           </Button>

@@ -1,24 +1,30 @@
 import { NextResponse } from 'next/server';
 import { generateSTPTrainingPlan } from '@/lib/ai-coach';
 import { getUserByStravaId, createGoal, sql } from '@/lib/db';
+import { requireAuth } from '@/lib/session';
 
 export async function POST(request: Request) {
   try {
+    // Get user from session instead of body
+    const sessionUser = await requireAuth();
+    
     const body = await request.json();
-    const { userId, targetDate, currentFTP, recentWeeklyMileage, longestRecentRide, currentAverageSpeed } = body;
+    const { targetDate, currentFTP, recentWeeklyMileage, longestRecentRide, currentAverageSpeed } = body;
 
-    if (!userId || !targetDate) {
+    if (!targetDate) {
       return NextResponse.json(
-        { error: 'Missing required fields: userId and targetDate' },
+        { error: 'Missing required field: targetDate' },
         { status: 400 }
       );
     }
 
-    // Get user from database
-    const user = await getUserByStravaId(Number(userId));
+    // Get full user from database
+    const user = await getUserByStravaId(sessionUser.stravaId);
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
+
+    console.log('Generating training plan for user:', user.id);
 
     // Generate the training plan using AI
     const plan = await generateSTPTrainingPlan({
@@ -31,7 +37,7 @@ export async function POST(request: Request) {
 
     if (!plan) {
       return NextResponse.json(
-        { error: 'Failed to generate training plan' },
+        { error: 'Failed to generate training plan. Please check that OPENAI_API_KEY is configured.' },
         { status: 500 }
       );
     }
@@ -72,22 +78,24 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Error creating training plan:', error);
     return NextResponse.json(
-      { error: 'Failed to create training plan', details: error.message },
+      { 
+        error: 'Failed to create training plan', 
+        details: error.message,
+        hint: error.message.includes('OPENAI_API_KEY') 
+          ? 'Please configure OPENAI_API_KEY in your environment variables'
+          : undefined
+      },
       { status: 500 }
     );
   }
 }
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const userId = searchParams.get('userId');
-
-  if (!userId) {
-    return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-  }
-
   try {
-    const user = await getUserByStravaId(Number(userId));
+    // Get user from session
+    const sessionUser = await requireAuth();
+    
+    const user = await getUserByStravaId(sessionUser.stravaId);
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }

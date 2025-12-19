@@ -31,6 +31,7 @@ export default function TrainingPage() {
   const [plans, setPlans] = useState<TrainingPlan[]>([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [showGenerator, setShowGenerator] = useState(false)
   const [formData, setFormData] = useState({
     targetDate: '',
@@ -46,13 +47,18 @@ export default function TrainingPage() {
 
   async function fetchPlans() {
     try {
-      // TODO: Replace with actual user ID from auth
-      const userId = "YOUR_STRAVA_ID"
-      const response = await fetch(`/api/training-plan?userId=${userId}`)
+      // No need for userId - uses session
+      const response = await fetch('/api/training-plan')
       const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch plans')
+      }
+      
       setPlans(data.plans || [])
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching plans:', error)
+      setError(error.message)
     } finally {
       setLoading(false)
     }
@@ -60,22 +66,21 @@ export default function TrainingPage() {
 
   async function generatePlan() {
     setGenerating(true)
+    setError(null)
     try {
-      const userId = "YOUR_STRAVA_ID"
+      // No need for userId - uses session
       const response = await fetch('/api/training-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          ...formData
-        })
+        body: JSON.stringify(formData)
       })
 
+      const data = await response.json()
+      
       if (!response.ok) {
-        throw new Error('Failed to generate plan')
+        throw new Error(data.details || data.error || 'Failed to generate plan')
       }
 
-      const data = await response.json()
       setPlans([data.trainingPlan, ...plans])
       setShowGenerator(false)
       setFormData({
@@ -85,9 +90,9 @@ export default function TrainingPage() {
         longestRecentRide: '',
         currentAverageSpeed: ''
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating plan:', error)
-      alert('Failed to generate training plan. Please try again.')
+      setError(error.message)
     } finally {
       setGenerating(false)
     }
@@ -120,6 +125,18 @@ export default function TrainingPage() {
             <p className="text-gray-400 mb-6">
               Tell us about your current fitness, and we'll create a personalized plan to get you ready for 204 miles at 17+ mph.
             </p>
+            
+            {error && (
+              <div className="bg-red-500/10 border border-red-500 rounded-lg p-4 mb-6">
+                <h3 className="font-bold text-red-400 mb-2">Error Generating Plan</h3>
+                <p className="text-red-200 text-sm">{error}</p>
+                {error.includes('OPENAI_API_KEY') && (
+                  <p className="text-red-200 text-sm mt-2">
+                    💡 <strong>Solution:</strong> Add your OpenAI API key to your environment variables in Vercel.
+                  </p>
+                )}
+              </div>
+            )}
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
               <div>

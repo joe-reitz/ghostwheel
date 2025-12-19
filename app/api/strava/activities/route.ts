@@ -52,25 +52,33 @@ export async function GET(request: Request) {
     
     switch(lookback) {
       case 'week':
-        afterDate.setDate(now.getDate() - 7);
+        afterDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         break;
       case 'month':
-        afterDate.setMonth(now.getMonth() - 1);
+        afterDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         break;
       case 'quarter':
-        afterDate.setMonth(now.getMonth() - 3);
+        afterDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
         break;
       case 'year':
-        afterDate.setFullYear(now.getFullYear() - 1);
+        afterDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
         break;
       case 'all':
         afterDate = new Date(0); // Unix epoch
         break;
       default:
-        afterDate.setMonth(now.getMonth() - 1);
+        afterDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     }
 
     const afterTimestamp = Math.floor(afterDate.getTime() / 1000);
+    
+    console.log('Date range for activities:', {
+      lookback,
+      now: now.toISOString(),
+      afterDate: afterDate.toISOString(),
+      afterTimestamp,
+      daysSince: Math.floor((now.getTime() - afterDate.getTime()) / (24 * 60 * 60 * 1000))
+    });
 
     // Refresh token if needed
     let accessToken = user.access_token;
@@ -83,10 +91,18 @@ export async function GET(request: Request) {
     // Fetch activities from Strava
     const stravaActivities = await getStravaActivities(accessToken, afterTimestamp);
     
+    console.log(`Fetched ${stravaActivities.length} activities from Strava`);
+    if (stravaActivities.length > 0) {
+      console.log('First activity date:', stravaActivities[0].start_date);
+      console.log('Last activity date:', stravaActivities[stravaActivities.length - 1].start_date);
+    }
+    
     // Filter for rides only
     const rides = stravaActivities.filter((a: any) => 
       a.type === 'Ride' || a.type === 'VirtualRide'
     );
+    
+    console.log(`Filtered to ${rides.length} rides`);
 
     // Process and store activities with calculated metrics
     const processedActivities = await Promise.all(

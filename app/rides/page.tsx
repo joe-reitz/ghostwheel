@@ -34,11 +34,19 @@ export default function RidesPage() {
 
   async function fetchActivities() {
     try {
-      // TODO: Replace with actual user ID from auth
-      const userId = "YOUR_STRAVA_ID"
-      const response = await fetch(`/api/strava/activities?userId=${userId}&lookback=year`)
+      // Uses session authentication - no need for userId
+      const response = await fetch('/api/strava/activities?lookback=year')
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch activities')
+      }
+      
       const data = await response.json()
-      setActivities(data.activities || [])
+      // Sort by date descending (newest first)
+      const sortedActivities = (data.activities || []).sort((a: Activity, b: Activity) => 
+        new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
+      )
+      setActivities(sortedActivities)
     } catch (error) {
       console.error('Error fetching activities:', error)
     } finally {

@@ -222,6 +222,7 @@ export async function GET(request: Request) {
 
             return {
               ...activity,
+              strava_id: activity.id, // Ensure strava_id is explicitly set
               ...calculatedMetrics,
               aiAnalysis
             };
@@ -233,6 +234,7 @@ export async function GET(request: Request) {
 
         return {
           ...activity,
+          strava_id: activity.id, // Ensure strava_id is explicitly set
           ...calculatedMetrics
         };
       })

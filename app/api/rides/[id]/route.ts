@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/session';
+import { getActivityStreams } from '@/lib/strava';
 
 export async function GET(
   request: NextRequest,
@@ -29,6 +30,15 @@ export async function GET(
     }
 
     const activity = await response.json();
+
+    // Fetch stream data for charts
+    let streamData = null;
+    try {
+      streamData = await getActivityStreams(user.accessToken, parseInt(activityId));
+    } catch (streamError) {
+      console.warn('Could not fetch stream data:', streamError);
+      // Continue without stream data - charts will fall back to showing basic info
+    }
 
     // Calculate additional metrics if power data is available
     let tss, intensityFactor, variabilityIndex;
@@ -67,6 +77,7 @@ export async function GET(
       tss,
       intensity_factor: intensityFactor,
       variability_index: variabilityIndex,
+      stream_data: streamData,
     });
 
   } catch (error) {

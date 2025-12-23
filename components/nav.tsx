@@ -22,6 +22,9 @@ export function Nav() {
             <Link href="/dashboard" className="text-white hover:text-white/80">
               Dashboard
             </Link>
+            <Link href="/latest-ride" className="text-white hover:text-white/80">
+              Latest Ride
+            </Link>
             <Link href="/goals" className="text-white hover:text-white/80">
               Goals
             </Link>

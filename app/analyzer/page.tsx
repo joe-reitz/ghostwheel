@@ -229,16 +229,6 @@ function RideAnalyzerContent() {
     new Date(activity.start_date).toLocaleDateString().includes(searchTerm)
   )
 
-  // Mock stream data for visualization
-  const mockStreamData = Array.from({ length: 120 }, (_, i) => ({
-    time: i,
-    power: 150 + Math.sin(i / 10) * 50 + Math.random() * 40,
-    hr: 130 + Math.sin(i / 15) * 20 + Math.random() * 15,
-    speed: 20 + Math.sin(i / 20) * 5 + Math.random() * 3,
-    cadence: 80 + Math.sin(i / 12) * 10 + Math.random() * 10,
-    elevation: 100 + Math.sin(i / 30) * 150
-  }))
-
   if (showRideSelector) {
     return (
       <div className="min-h-screen bg-gradient-dark text-white">
@@ -352,6 +342,36 @@ function RideAnalyzerContent() {
   const maxSpeedMph = (ride.max_speed * 2.23694).toFixed(1)
   const durationHours = Math.floor(ride.moving_time / 3600)
   const durationMinutes = Math.floor((ride.moving_time % 3600) / 60)
+
+  // Process stream data for charts
+  let chartData = []
+  if (ride.stream_data) {
+    const streams = ride.stream_data
+    const timeData = streams.time?.data || []
+    const powerData = streams.watts?.data || []
+    const hrData = streams.heartrate?.data || []
+    const speedData = streams.velocity_smooth?.data || []
+    const cadenceData = streams.cadence?.data || []
+    const altitudeData = streams.altitude?.data || []
+
+    // Create chart data points (sample every 10th point to reduce data size)
+    const sampleRate = Math.max(1, Math.floor(timeData.length / 200))
+    chartData = timeData
+      .filter((_: any, i: number) => i % sampleRate === 0)
+      .map((time: number, i: number) => {
+        const idx = i * sampleRate
+        return {
+          time: Math.round(time / 60), // Convert to minutes
+          power: powerData[idx] || 0,
+          hr: hrData[idx] || 0,
+          speed: speedData[idx] ? (speedData[idx] * 3.6).toFixed(1) : 0, // Convert m/s to km/h
+          cadence: cadenceData[idx] || 0,
+          elevation: altitudeData[idx] || 0
+        }
+      })
+  }
+
+  const hasChartData = chartData.length > 0
 
   return (
     <div className="min-h-screen bg-gradient-dark text-white">
@@ -557,10 +577,11 @@ function RideAnalyzerContent() {
         </div>
 
         {/* Power & HR Chart */}
-        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur mb-8">
-          <h3 className="text-xl font-bold mb-4">Power & Heart Rate Over Time</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={mockStreamData}>
+        {hasChartData && (ride.average_watts || ride.average_heartrate) && (
+          <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur mb-8">
+            <h3 className="text-xl font-bold mb-4">Power & Heart Rate Over Time</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis 
                 dataKey="time" 
@@ -579,12 +600,14 @@ function RideAnalyzerContent() {
             </LineChart>
           </ResponsiveContainer>
         </div>
+        )}
 
         {/* Elevation Profile */}
-        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur">
-          <h3 className="text-xl font-bold mb-4">Elevation Profile</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={mockStreamData}>
+        {hasChartData && (
+          <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur">
+            <h3 className="text-xl font-bold mb-4">Elevation Profile</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={chartData}>
               <defs>
                 <linearGradient id="colorElevation" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/>
@@ -602,6 +625,7 @@ function RideAnalyzerContent() {
             </AreaChart>
           </ResponsiveContainer>
         </div>
+        )}
       </main>
     </div>
   )

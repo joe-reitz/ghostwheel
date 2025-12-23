@@ -50,8 +50,8 @@ export function RouteMap({ polyline, activities, height = '400px', powerData, ft
     return null
   }
 
-  // Show Zwift placeholder for virtual rides without real GPS data
-  if (isVirtualRide && !polyline) {
+  // Show Zwift placeholder for ALL virtual rides (ignore any fake GPS data from Strava)
+  if (isVirtualRide) {
     const zwiftWorld = getZwiftWorld(rideName)
     return (
       <div 
@@ -65,7 +65,7 @@ export function RouteMap({ polyline, activities, height = '400px', powerData, ft
             <p className="text-purple-300 text-lg mb-3">📍 {zwiftWorld}</p>
           )}
           <p className="text-gray-300 text-sm">
-            Virtual rides don't have GPS data
+            Virtual ride in Zwift's digital world
           </p>
         </div>
       </div>

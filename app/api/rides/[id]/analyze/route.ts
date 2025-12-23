@@ -3,9 +3,14 @@ import { getSessionUser } from '@/lib/session';
 import OpenAI from 'openai';
 import { sql } from '@/lib/db';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+function getOpenAIClient() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is not configured');
+  }
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+}
 
 export async function POST(
   request: NextRequest,
@@ -140,6 +145,7 @@ Keep responses concise but informative (2-4 paragraphs unless more detail is spe
     messages.push({ role: 'user', content: userPrompt });
 
     // Get AI response
+    const openai = getOpenAIClient();
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages,

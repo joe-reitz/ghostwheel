@@ -143,3 +143,5 @@ If you find issues, note:
 ✅ Page performs well on desktop and mobile  
 ✅ User experience is smooth and intuitive
 
+
+

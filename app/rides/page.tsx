@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Nav } from "@/components/nav"
-import { Calendar, TrendingUp, Zap, Heart, Mountain, Clock } from "lucide-react"
+import { Calendar, TrendingUp, Zap, Heart, Mountain, Clock, Bot } from "lucide-react"
 
 interface Activity {
   id: number
@@ -123,11 +123,13 @@ export default function RidesPage() {
               return (
                 <div
                   key={activity.id}
-                  onClick={() => router.push(`/rides/${activity.id}`)}
-                  className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 hover:bg-gray-800 hover:border-purple-500/50 transition-all cursor-pointer"
+                  className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 hover:bg-gray-800 hover:border-purple-500/50 transition-all"
                 >
                   <div className="flex justify-between items-start mb-4">
-                    <div className="flex-1">
+                    <div 
+                      className="flex-1 cursor-pointer"
+                      onClick={() => router.push(`/rides/${activity.id}`)}
+                    >
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-xl font-bold">{activity.name}</h3>
                         <span className={`text-xs px-2 py-1 rounded ${
@@ -156,9 +158,21 @@ export default function RidesPage() {
                       </div>
                     </div>
 
-                    <div className="text-right">
-                      <div className="text-3xl font-bold text-purple-400">{distanceMiles}</div>
-                      <div className="text-sm text-gray-400">miles</div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <div className="text-3xl font-bold text-purple-400">{distanceMiles}</div>
+                        <div className="text-sm text-gray-400">miles</div>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          router.push(`/analyzer?rideId=${activity.id}`)
+                        }}
+                        className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+                      >
+                        <Bot size={18} />
+                        Analyze with AI
+                      </button>
                     </div>
                   </div>
 

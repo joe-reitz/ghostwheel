@@ -15,3 +15,5 @@ CREATE TABLE IF NOT EXISTS ride_analyses (
 CREATE INDEX IF NOT EXISTS idx_ride_analyses_user_activity 
   ON ride_analyses(user_id, activity_id, created_at DESC);
 
+
+

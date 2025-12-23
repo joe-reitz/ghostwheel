@@ -181,3 +181,7 @@ When reporting an issue, please include:
 - Power calculations require fetching additional stream data from Strava (slower)
 - You can speed up initial loads by setting `analyze=false` (which is the default)
 
+
+
+
+

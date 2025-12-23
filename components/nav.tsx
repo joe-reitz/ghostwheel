@@ -31,6 +31,9 @@ export function Nav() {
             <Link href="/rides" className="text-white hover:text-white/80">
               Rides
             </Link>
+            <Link href="/analyzer" className="text-white hover:text-white/80">
+              Analyzer
+            </Link>
           </div>
         </div>
         <div className="flex items-center space-x-4">

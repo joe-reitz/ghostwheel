@@ -69,3 +69,7 @@ echo "2. Visit http://localhost:3000/dashboard"
 echo "3. If errors occur, check the terminal logs for detailed error messages"
 echo ""
 
+
+
+
+

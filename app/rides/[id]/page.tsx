@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useParams } from "next/navigation"
 import { Nav } from "@/components/nav"
 import { 
   LineChart, Line, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts'
-import { Calendar, MapPin, TrendingUp, Zap, Heart, Activity, Clock, Mountain } from "lucide-react"
+import { Calendar, MapPin, TrendingUp, Zap, Heart, Activity, Clock, Mountain, Send, Bot, User } from "lucide-react"
 
 interface RideDetails {
   id: number
@@ -30,9 +30,14 @@ interface RideDetails {
   variability_index?: number
   kilojoules?: number
   stream_data?: any
-  ai_analysis?: string
-  ai_feedback?: string
   summary_polyline?: string
+  description?: string
+}
+
+interface Message {
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: Date
 }
 
 export default function RideAnalysisPage() {
@@ -41,43 +46,33 @@ export default function RideAnalysisPage() {
 
   const [ride, setRide] = useState<RideDetails | null>(null)
   const [loading, setLoading] = useState(true)
-  const [analyzing, setAnalyzing] = useState(false)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [inputValue, setInputValue] = useState("")
+  const [isAsking, setIsAsking] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (rideId) {
       fetchRideDetails()
+      fetchConversationHistory()
     }
   }, [rideId])
 
+  useEffect(() => {
+    // Scroll to bottom when new messages arrive
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
   async function fetchRideDetails() {
     try {
-      // TODO: Implement ride details API endpoint
-      // const response = await fetch(`/api/rides/${rideId}`)
-      // const data = await response.json()
-      // setRide(data)
+      const response = await fetch(`/api/rides/${rideId}`)
       
-      // Mock data for now
-      setRide({
-        id: Number(rideId),
-        name: "Morning Ride",
-        start_date: new Date().toISOString(),
-        distance: 50000,
-        moving_time: 7200,
-        elapsed_time: 7800,
-        total_elevation_gain: 500,
-        average_speed: 6.94,
-        max_speed: 12.5,
-        average_watts: 220,
-        max_watts: 450,
-        weighted_power: 235,
-        average_heartrate: 145,
-        max_heartrate: 175,
-        average_cadence: 85,
-        tss: 125,
-        intensity_factor: 0.78,
-        variability_index: 1.07,
-        kilojoules: 1584
-      })
+      if (!response.ok) {
+        throw new Error('Failed to fetch ride details')
+      }
+      
+      const data = await response.json()
+      setRide(data)
     } catch (error) {
       console.error('Error fetching ride:', error)
     } finally {
@@ -85,17 +80,95 @@ export default function RideAnalysisPage() {
     }
   }
 
-  async function analyzeRide() {
-    setAnalyzing(true)
+  async function fetchConversationHistory() {
     try {
-      // TODO: Call AI analysis endpoint
-      // const response = await fetch(`/api/rides/${rideId}/analyze`, { method: 'POST' })
-      // const data = await response.json()
-      // setRide({...ride, ...data})
+      const response = await fetch(`/api/rides/${rideId}/analyze`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.history && data.history.length > 0) {
+          const conversationMessages: Message[] = []
+          data.history.forEach((item: any) => {
+            conversationMessages.push({
+              role: 'user',
+              content: item.user_prompt,
+              timestamp: new Date(item.created_at)
+            })
+            conversationMessages.push({
+              role: 'assistant',
+              content: item.ai_response,
+              timestamp: new Date(item.created_at)
+            })
+          })
+          setMessages(conversationMessages)
+        }
+      }
     } catch (error) {
-      console.error('Error analyzing ride:', error)
+      console.error('Error fetching conversation history:', error)
+    }
+  }
+
+  async function askQuestion() {
+    if (!inputValue.trim() || isAsking) return
+
+    const userMessage: Message = {
+      role: 'user',
+      content: inputValue,
+      timestamp: new Date()
+    }
+
+    setMessages(prev => [...prev, userMessage])
+    setInputValue("")
+    setIsAsking(true)
+
+    try {
+      // Build conversation history for context
+      const conversationHistory = messages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }))
+
+      const response = await fetch(`/api/rides/${rideId}/analyze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userPrompt: inputValue,
+          conversationHistory
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to get AI response')
+      }
+
+      const data = await response.json()
+
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: data.response,
+        timestamp: new Date()
+      }
+
+      setMessages(prev => [...prev, assistantMessage])
+    } catch (error) {
+      console.error('Error asking question:', error)
+      const errorMessage: Message = {
+        role: 'assistant',
+        content: 'Sorry, I encountered an error. Please try again.',
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, errorMessage])
     } finally {
-      setAnalyzing(false)
+      setIsAsking(false)
+    }
+  }
+
+  function handleKeyPress(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      askQuestion()
     }
   }
 
@@ -217,40 +290,119 @@ export default function RideAnalysisPage() {
           )}
         </div>
 
-        {/* AI Analysis */}
-        {ride.ai_analysis ? (
-          <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-6 mb-8">
-            <div className="flex items-start gap-4">
-              <div className="text-4xl">🤖</div>
-              <div className="flex-1">
-                <h2 className="text-2xl font-bold mb-4">AI Coach Analysis</h2>
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="font-semibold text-purple-300 mb-2">Analysis</h3>
-                    <p className="text-gray-300">{ride.ai_analysis}</p>
-                  </div>
-                  {ride.ai_feedback && (
-                    <div>
-                      <h3 className="font-semibold text-purple-300 mb-2">Feedback</h3>
-                      <p className="text-gray-300">{ride.ai_feedback}</p>
-                    </div>
-                  )}
-                </div>
+        {/* AI Coach Conversation */}
+        <div className="bg-gray-800/50 border border-gray-700 rounded-xl backdrop-blur mb-8 overflow-hidden flex flex-col" style={{ height: '600px' }}>
+          <div className="bg-purple-600/20 border-b border-purple-500/30 px-6 py-4">
+            <div className="flex items-center gap-3">
+              <Bot size={24} className="text-purple-400" />
+              <div>
+                <h2 className="text-xl font-bold">AI Coach Analysis</h2>
+                <p className="text-sm text-gray-400">Ask questions about this ride, get insights, and coaching feedback</p>
               </div>
             </div>
           </div>
-        ) : (
-          <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 text-center mb-8">
-            <p className="text-gray-400 mb-4">Get AI-powered insights on this ride</p>
-            <button
-              onClick={analyzeRide}
-              disabled={analyzing}
-              className="bg-purple-600 hover:bg-purple-700 px-6 py-2 rounded-lg disabled:opacity-50"
-            >
-              {analyzing ? 'Analyzing...' : 'Analyze with AI'}
-            </button>
+
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {messages.length === 0 ? (
+              <div className="text-center py-12">
+                <Bot size={48} className="text-purple-400 mx-auto mb-4 opacity-50" />
+                <p className="text-gray-400 mb-2">Start a conversation about your ride</p>
+                <p className="text-sm text-gray-500">Ask me anything - performance analysis, pacing, training advice, or race strategy</p>
+                <div className="mt-6 flex flex-wrap gap-2 justify-center">
+                  <button
+                    onClick={() => setInputValue("How did I perform on this ride?")}
+                    className="text-sm px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 rounded-lg transition-colors"
+                  >
+                    How did I perform?
+                  </button>
+                  <button
+                    onClick={() => setInputValue("What should I focus on improving?")}
+                    className="text-sm px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 rounded-lg transition-colors"
+                  >
+                    What should I improve?
+                  </button>
+                  <button
+                    onClick={() => setInputValue("Was my pacing good for this ride?")}
+                    className="text-sm px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 rounded-lg transition-colors"
+                  >
+                    Was my pacing good?
+                  </button>
+                </div>
+              </div>
+            ) : (
+              messages.map((message, index) => (
+                <div
+                  key={index}
+                  className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  {message.role === 'assistant' && (
+                    <div className="flex-shrink-0">
+                      <Bot size={32} className="text-purple-400 bg-purple-500/20 p-1.5 rounded-lg" />
+                    </div>
+                  )}
+                  <div
+                    className={`max-w-[80%] rounded-xl px-4 py-3 ${
+                      message.role === 'user'
+                        ? 'bg-blue-600/30 border border-blue-500/30'
+                        : 'bg-gray-700/50 border border-gray-600/30'
+                    }`}
+                  >
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                  {message.role === 'user' && (
+                    <div className="flex-shrink-0">
+                      <User size={32} className="text-blue-400 bg-blue-500/20 p-1.5 rounded-lg" />
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+            {isAsking && (
+              <div className="flex gap-3 justify-start">
+                <div className="flex-shrink-0">
+                  <Bot size={32} className="text-purple-400 bg-purple-500/20 p-1.5 rounded-lg" />
+                </div>
+                <div className="bg-gray-700/50 border border-gray-600/30 rounded-xl px-4 py-3">
+                  <div className="flex gap-1">
+                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
           </div>
-        )}
+
+          {/* Input Area */}
+          <div className="border-t border-gray-700 p-4">
+            <div className="flex gap-3">
+              <textarea
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Ask about your performance, pacing, training advice, or add context about how you felt..."
+                className="flex-1 bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-sm resize-none focus:outline-none focus:border-purple-500 transition-colors"
+                rows={3}
+                disabled={isAsking}
+              />
+              <button
+                onClick={askQuestion}
+                disabled={isAsking || !inputValue.trim()}
+                className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed px-6 rounded-lg transition-colors flex items-center gap-2"
+              >
+                <Send size={18} />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Press Enter to send, Shift+Enter for new line
+            </p>
+          </div>
+        </div>
 
         {/* Power & HR Chart */}
         <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur mb-8">
@@ -361,5 +513,7 @@ export default function RideAnalysisPage() {
     </div>
   )
 }
+
+
 
 

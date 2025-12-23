@@ -191,6 +191,18 @@ CREATE TABLE IF NOT EXISTS coaching_insights (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Ride analyses (conversation history for ride-specific AI coaching)
+CREATE TABLE IF NOT EXISTS ride_analyses (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  activity_id BIGINT NOT NULL, -- Strava activity ID
+  user_prompt TEXT NOT NULL,
+  ai_response TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  
+  INDEX idx_user_activity (user_id, activity_id, created_at DESC)
+);
+
 -- Segments (Strava segments for competitive analysis)
 CREATE TABLE IF NOT EXISTS segment_efforts (
   id SERIAL PRIMARY KEY,
@@ -228,5 +240,7 @@ CREATE TRIGGER update_training_load_updated_at BEFORE UPDATE ON training_load FO
 CREATE TRIGGER update_goals_updated_at BEFORE UPDATE ON goals FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_training_plans_updated_at BEFORE UPDATE ON training_plans FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_planned_workouts_updated_at BEFORE UPDATE ON planned_workouts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+
 
 

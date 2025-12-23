@@ -276,3 +276,7 @@ export function calculateWattsPerKg(watts: number, weightKg: number): number {
 }
 
 
+
+
+
+

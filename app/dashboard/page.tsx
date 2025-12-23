@@ -1,16 +1,18 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Nav } from "@/components/nav"
 import { 
   LineChart, Line, AreaChart, Area, BarChart, Bar, 
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell
 } from 'recharts'
-import { Calendar, TrendingUp, Zap, Heart, Target, Activity, RefreshCw } from 'lucide-react'
+import { Calendar, TrendingUp, Zap, Heart, Target, Activity, RefreshCw, Bot } from 'lucide-react'
 
 interface ActivityData {
   id: number
+  strava_id: number
   name: string
   start_date: string
   distance: number
@@ -48,6 +50,7 @@ const lookbackOptions = [
 ]
 
 export default function Dashboard() {
+  const router = useRouter()
   const [lookback, setLookback] = useState("month")
   const [activities, setActivities] = useState<ActivityData[]>([])
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
@@ -400,7 +403,7 @@ export default function Dashboard() {
             {[...activities].sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime()).slice(0, 5).map((activity) => (
               <div key={activity.id} className="bg-gray-700/50 rounded-lg p-4 hover:bg-gray-700 transition-colors">
                 <div className="flex justify-between items-start mb-2">
-                  <div>
+                  <div className="flex-1">
                     <h4 className="font-bold text-lg">{activity.name}</h4>
                     <p className="text-gray-400 text-sm">
                       {new Date(activity.start_date).toLocaleDateString('en-US', { 
@@ -410,13 +413,22 @@ export default function Dashboard() {
                       })}
                     </p>
                   </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-purple-400">
-                      {(activity.distance * 0.000621371).toFixed(1)} mi
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-purple-400">
+                        {(activity.distance * 0.000621371).toFixed(1)} mi
+                      </div>
+                      <div className="text-sm text-gray-400">
+                        {(activity.average_speed * 2.23694).toFixed(1)} mph
+                      </div>
                     </div>
-                    <div className="text-sm text-gray-400">
-                      {(activity.average_speed * 2.23694).toFixed(1)} mph
-                    </div>
+                    <button
+                      onClick={() => router.push(`/analyzer?rideId=${activity.strava_id}`)}
+                      className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm"
+                    >
+                      <Bot size={16} />
+                      Analyze
+                    </button>
                   </div>
                 </div>
                 

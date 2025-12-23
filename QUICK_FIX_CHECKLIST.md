@@ -149,3 +149,7 @@ If you're still seeing errors, it's likely:
 - Session issue (check `/api/debug/session`)  
 - Environment variable issue (check Vercel settings)
 
+
+
+
+

@@ -100,3 +100,7 @@ Could add:
 - Export settings to file
 - Connect to TrainingPeaks/other platforms
 
+
+
+
+

@@ -1,13 +1,13 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { useParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { Nav } from "@/components/nav"
 import { 
-  LineChart, Line, AreaChart, Area, BarChart, Bar,
+  LineChart, Line, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts'
-import { Calendar, MapPin, TrendingUp, Zap, Heart, Activity, Clock, Mountain, Send, Bot, User } from "lucide-react"
+import { Calendar, TrendingUp, Zap, Heart, Activity, Clock, Mountain, Send, Bot, User, ArrowRight } from "lucide-react"
 
 interface RideDetails {
   id: number
@@ -40,47 +40,69 @@ interface Message {
   timestamp: Date
 }
 
-export default function RideAnalysisPage() {
-  const params = useParams()
-  const rideId = params?.id
-
+export default function LatestRidePage() {
+  const router = useRouter()
   const [ride, setRide] = useState<RideDetails | null>(null)
   const [loading, setLoading] = useState(true)
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState("")
   const [isAsking, setIsAsking] = useState(false)
+  const [autoAnalyzed, setAutoAnalyzed] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (rideId) {
-      fetchRideDetails()
-      fetchConversationHistory()
-    }
-  }, [rideId])
+    fetchLatestRide()
+  }, [])
 
   useEffect(() => {
-    // Scroll to bottom when new messages arrive
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  async function fetchRideDetails() {
+  useEffect(() => {
+    // Auto-analyze when ride is loaded
+    if (ride && !autoAnalyzed && messages.length === 0) {
+      setAutoAnalyzed(true)
+      setInputValue("Give me a quick analysis of this ride and any coaching insights.")
+      // Trigger the analysis after a short delay
+      setTimeout(() => {
+        askQuestion("Give me a quick analysis of this ride and any coaching insights.")
+      }, 500)
+    }
+  }, [ride, autoAnalyzed, messages.length])
+
+  async function fetchLatestRide() {
     try {
-      const response = await fetch(`/api/rides/${rideId}`)
+      // Fetch activities to get the latest one
+      const response = await fetch('/api/strava/activities?lookback=month&limit=1')
       
       if (!response.ok) {
-        throw new Error('Failed to fetch ride details')
+        throw new Error('Failed to fetch activities')
       }
       
       const data = await response.json()
-      setRide(data)
+      
+      if (data.activities && data.activities.length > 0) {
+        const latestActivity = data.activities[0]
+        
+        // Fetch full details for this ride
+        const detailsResponse = await fetch(`/api/rides/${latestActivity.strava_id}`)
+        
+        if (detailsResponse.ok) {
+          const rideData = await detailsResponse.json()
+          setRide(rideData)
+          
+          // Fetch conversation history
+          await fetchConversationHistory(latestActivity.strava_id)
+        }
+      }
     } catch (error) {
-      console.error('Error fetching ride:', error)
+      console.error('Error fetching latest ride:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  async function fetchConversationHistory() {
+  async function fetchConversationHistory(rideId: number) {
     try {
       const response = await fetch(`/api/rides/${rideId}/analyze`)
       
@@ -108,33 +130,35 @@ export default function RideAnalysisPage() {
     }
   }
 
-  async function askQuestion() {
-    if (!inputValue.trim() || isAsking) return
+  async function askQuestion(customPrompt?: string) {
+    const prompt = customPrompt || inputValue
+    if (!prompt.trim() || isAsking || !ride) return
 
     const userMessage: Message = {
       role: 'user',
-      content: inputValue,
+      content: prompt,
       timestamp: new Date()
     }
 
     setMessages(prev => [...prev, userMessage])
-    setInputValue("")
+    if (!customPrompt) {
+      setInputValue("")
+    }
     setIsAsking(true)
 
     try {
-      // Build conversation history for context
       const conversationHistory = messages.map(msg => ({
         role: msg.role,
         content: msg.content
       }))
 
-      const response = await fetch(`/api/rides/${rideId}/analyze`, {
+      const response = await fetch(`/api/rides/${ride.id}/analyze`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          userPrompt: inputValue,
+          userPrompt: prompt,
           conversationHistory
         })
       })
@@ -178,7 +202,7 @@ export default function RideAnalysisPage() {
         <Nav />
         <main className="mx-auto max-w-7xl px-4 py-8">
           <div className="flex items-center justify-center h-96">
-            <div className="text-white text-xl">Loading ride details...</div>
+            <div className="text-white text-xl">Loading your latest ride...</div>
           </div>
         </main>
       </div>
@@ -190,7 +214,16 @@ export default function RideAnalysisPage() {
       <div className="min-h-screen bg-gradient-dark">
         <Nav />
         <main className="mx-auto max-w-7xl px-4 py-8">
-          <div className="text-center text-white">Ride not found</div>
+          <div className="text-center text-white">
+            <h2 className="text-2xl font-bold mb-4">No rides found</h2>
+            <p className="text-gray-400 mb-6">Connect your Strava account to see your latest ride</p>
+            <button
+              onClick={() => router.push('/settings')}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg transition-colors"
+            >
+              Go to Settings
+            </button>
+          </div>
         </main>
       </div>
     )
@@ -202,36 +235,6 @@ export default function RideAnalysisPage() {
   const durationHours = Math.floor(ride.moving_time / 3600)
   const durationMinutes = Math.floor((ride.moving_time % 3600) / 60)
 
-  // Process stream data for charts
-  let chartData = []
-  if (ride.stream_data) {
-    const streams = ride.stream_data
-    const timeData = streams.time?.data || []
-    const powerData = streams.watts?.data || []
-    const hrData = streams.heartrate?.data || []
-    const speedData = streams.velocity_smooth?.data || []
-    const cadenceData = streams.cadence?.data || []
-    const altitudeData = streams.altitude?.data || []
-
-    // Create chart data points (sample every 10th point to reduce data size)
-    const sampleRate = Math.max(1, Math.floor(timeData.length / 200))
-    chartData = timeData
-      .filter((_: any, i: number) => i % sampleRate === 0)
-      .map((time: number, i: number) => {
-        const idx = i * sampleRate
-        return {
-          time: Math.round(time / 60), // Convert to minutes
-          power: powerData[idx] || 0,
-          hr: hrData[idx] || 0,
-          speed: speedData[idx] ? (speedData[idx] * 3.6).toFixed(1) : 0, // Convert m/s to km/h
-          cadence: cadenceData[idx] || 0,
-          elevation: altitudeData[idx] || 0
-        }
-      })
-  }
-
-  const hasChartData = chartData.length > 0
-
   return (
     <div className="min-h-screen bg-gradient-dark text-white">
       <Nav />
@@ -239,16 +242,28 @@ export default function RideAnalysisPage() {
       <main className="mx-auto max-w-7xl px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-2 text-gray-400 mb-2">
-            <Calendar size={16} />
-            <span>{new Date(ride.start_date).toLocaleDateString('en-US', { 
-              weekday: 'long', 
-              year: 'numeric',
-              month: 'long', 
-              day: 'numeric' 
-            })}</span>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-4xl font-bold mb-2">🚴 Latest Ride</h1>
+              <div className="flex items-center gap-2 text-gray-400">
+                <Calendar size={16} />
+                <span>{new Date(ride.start_date).toLocaleDateString('en-US', { 
+                  weekday: 'long', 
+                  year: 'numeric',
+                  month: 'long', 
+                  day: 'numeric' 
+                })}</span>
+              </div>
+            </div>
+            <button
+              onClick={() => router.push(`/analyzer?rideId=${ride.id}`)}
+              className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg border border-gray-700 flex items-center gap-2 transition-colors"
+            >
+              Full Analysis
+              <ArrowRight size={16} />
+            </button>
           </div>
-          <h1 className="text-4xl font-bold mb-2">{ride.name}</h1>
+          <h2 className="text-2xl font-semibold text-purple-400">{ride.name}</h2>
         </div>
 
         {/* Key Metrics Grid */}
@@ -310,45 +325,24 @@ export default function RideAnalysisPage() {
           )}
         </div>
 
-        {/* AI Coach Conversation */}
-        <div className="bg-gray-800/50 border border-gray-700 rounded-xl backdrop-blur mb-8 overflow-hidden flex flex-col" style={{ height: '600px' }}>
+        {/* AI Coach Analysis */}
+        <div className="bg-gray-800/50 border border-gray-700 rounded-xl backdrop-blur mb-8 overflow-hidden flex flex-col" style={{ height: '700px' }}>
           <div className="bg-purple-600/20 border-b border-purple-500/30 px-6 py-4">
             <div className="flex items-center gap-3">
               <Bot size={24} className="text-purple-400" />
               <div>
-                <h2 className="text-xl font-bold">AI Coach Analysis</h2>
-                <p className="text-sm text-gray-400">Ask questions about this ride, get insights, and coaching feedback</p>
+                <h2 className="text-xl font-bold">🤖 AI Coach Analysis</h2>
+                <p className="text-sm text-gray-400">Your latest ride analyzed with AI coaching insights</p>
               </div>
             </div>
           </div>
 
           {/* Messages Area */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {messages.length === 0 ? (
+            {messages.length === 0 && !isAsking ? (
               <div className="text-center py-12">
                 <Bot size={48} className="text-purple-400 mx-auto mb-4 opacity-50" />
-                <p className="text-gray-400 mb-2">Start a conversation about your ride</p>
-                <p className="text-sm text-gray-500">Ask me anything - performance analysis, pacing, training advice, or race strategy</p>
-                <div className="mt-6 flex flex-wrap gap-2 justify-center">
-                  <button
-                    onClick={() => setInputValue("How did I perform on this ride?")}
-                    className="text-sm px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 rounded-lg transition-colors"
-                  >
-                    How did I perform?
-                  </button>
-                  <button
-                    onClick={() => setInputValue("What should I focus on improving?")}
-                    className="text-sm px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 rounded-lg transition-colors"
-                  >
-                    What should I improve?
-                  </button>
-                  <button
-                    onClick={() => setInputValue("Was my pacing good for this ride?")}
-                    className="text-sm px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 rounded-lg transition-colors"
-                  >
-                    Was my pacing good?
-                  </button>
-                </div>
+                <p className="text-gray-400 mb-2">Analyzing your ride...</p>
               </div>
             ) : (
               messages.map((message, index) => (
@@ -362,7 +356,7 @@ export default function RideAnalysisPage() {
                     </div>
                   )}
                   <div
-                    className={`max-w-[80%] rounded-xl px-4 py-3 ${
+                    className={`max-w-[85%] rounded-xl px-4 py-3 ${
                       message.role === 'user'
                         ? 'bg-blue-600/30 border border-blue-500/30'
                         : 'bg-gray-700/50 border border-gray-600/30'
@@ -405,13 +399,13 @@ export default function RideAnalysisPage() {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Ask about your performance, pacing, training advice, or add context about how you felt..."
+                placeholder="Ask follow-up questions about your latest ride..."
                 className="flex-1 bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-sm resize-none focus:outline-none focus:border-purple-500 transition-colors"
                 rows={3}
                 disabled={isAsking}
               />
               <button
-                onClick={askQuestion}
+                onClick={() => askQuestion()}
                 disabled={isAsking || !inputValue.trim()}
                 className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed px-6 rounded-lg transition-colors flex items-center gap-2"
               >
@@ -424,122 +418,34 @@ export default function RideAnalysisPage() {
           </div>
         </div>
 
-        {/* Power & HR Chart */}
-        {hasChartData && (ride.average_watts || ride.average_heartrate) && (
-          <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur mb-8">
-            <h3 className="text-xl font-bold mb-4">Power & Heart Rate Over Time</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis 
-                dataKey="time" 
-                stroke="#9CA3AF"
-                label={{ value: 'Time (minutes)', position: 'insideBottom', offset: -5 }}
-              />
-              <YAxis yAxisId="left" stroke="#F59E0B" label={{ value: 'Power (W)', angle: -90, position: 'insideLeft' }} />
-              <YAxis yAxisId="right" orientation="right" stroke="#EF4444" label={{ value: 'HR (bpm)', angle: 90, position: 'insideRight' }} />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-                labelStyle={{ color: '#F3F4F6' }}
-              />
-              <Legend />
-              <Line yAxisId="left" type="monotone" dataKey="power" stroke="#F59E0B" strokeWidth={2} dot={false} name="Power (W)" />
-              <Line yAxisId="right" type="monotone" dataKey="hr" stroke="#EF4444" strokeWidth={2} dot={false} name="Heart Rate (bpm)" />
-            </LineChart>
-          </ResponsiveContainer>
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <button
+            onClick={() => router.push('/rides')}
+            className="bg-gray-800/50 hover:bg-gray-800 border border-gray-700 rounded-xl p-6 transition-all text-left"
+          >
+            <h3 className="text-lg font-bold mb-2">View All Rides</h3>
+            <p className="text-sm text-gray-400">Browse your complete cycling history</p>
+          </button>
+          
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="bg-gray-800/50 hover:bg-gray-800 border border-gray-700 rounded-xl p-6 transition-all text-left"
+          >
+            <h3 className="text-lg font-bold mb-2">Training Dashboard</h3>
+            <p className="text-sm text-gray-400">View your training metrics and progress</p>
+          </button>
+          
+          <button
+            onClick={() => router.push('/analyzer')}
+            className="bg-gray-800/50 hover:bg-gray-800 border border-gray-700 rounded-xl p-6 transition-all text-left"
+          >
+            <h3 className="text-lg font-bold mb-2">Ride Analyzer</h3>
+            <p className="text-sm text-gray-400">Deep dive into any ride with AI analysis</p>
+          </button>
         </div>
-        )}
-
-        {/* Elevation Profile */}
-        {hasChartData && (
-          <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur mb-8">
-            <h3 className="text-xl font-bold mb-4">Elevation Profile</h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={chartData}>
-              <defs>
-                <linearGradient id="colorElevation" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#10B981" stopOpacity={0.1}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="time" stroke="#9CA3AF" />
-              <YAxis stroke="#9CA3AF" label={{ value: 'Elevation (m)', angle: -90, position: 'insideLeft' }} />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-                labelStyle={{ color: '#F3F4F6' }}
-              />
-              <Area type="monotone" dataKey="elevation" stroke="#10B981" fillOpacity={1} fill="url(#colorElevation)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-        )}
-
-        {/* Speed & Cadence */}
-        {hasChartData && (
-          <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur mb-8">
-            <h3 className="text-xl font-bold mb-4">Speed & Cadence</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="time" stroke="#9CA3AF" />
-              <YAxis yAxisId="left" stroke="#3B82F6" />
-              <YAxis yAxisId="right" orientation="right" stroke="#A78BFA" />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-                labelStyle={{ color: '#F3F4F6' }}
-              />
-              <Legend />
-              <Line yAxisId="left" type="monotone" dataKey="speed" stroke="#3B82F6" strokeWidth={2} dot={false} name="Speed (km/h)" />
-              <Line yAxisId="right" type="monotone" dataKey="cadence" stroke="#A78BFA" strokeWidth={2} dot={false} name="Cadence (rpm)" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        )}
-
-        {/* Advanced Metrics */}
-        {ride.intensity_factor && (
-          <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur">
-            <h3 className="text-xl font-bold mb-4">Advanced Metrics</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <div className="text-sm text-gray-400 mb-1">Intensity Factor (IF)</div>
-                <div className="text-3xl font-bold">{ride.intensity_factor.toFixed(2)}</div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {ride.intensity_factor < 0.75 ? 'Easy recovery' : 
-                   ride.intensity_factor < 0.85 ? 'Moderate endurance' :
-                   ride.intensity_factor < 0.95 ? 'Tempo effort' :
-                   ride.intensity_factor < 1.05 ? 'Threshold workout' : 'High intensity'}
-                </div>
-              </div>
-
-              {ride.variability_index && (
-                <div>
-                  <div className="text-sm text-gray-400 mb-1">Variability Index (VI)</div>
-                  <div className="text-3xl font-bold">{ride.variability_index.toFixed(2)}</div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {ride.variability_index < 1.05 ? 'Very steady pacing' :
-                     ride.variability_index < 1.10 ? 'Good pacing' :
-                     'Variable effort'}
-                  </div>
-                </div>
-              )}
-
-              {ride.kilojoules && (
-                <div>
-                  <div className="text-sm text-gray-400 mb-1">Work (kJ)</div>
-                  <div className="text-3xl font-bold">{ride.kilojoules}</div>
-                  <div className="text-xs text-gray-500 mt-1">≈ {Math.round(ride.kilojoules / 4.184)} calories</div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </main>
     </div>
   )
 }
-
-
-
 

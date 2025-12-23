@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { useParams } from "next/navigation"
+import { useState, useEffect, useRef, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Nav } from "@/components/nav"
 import { 
-  LineChart, Line, AreaChart, Area, BarChart, Bar,
+  LineChart, Line, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts'
-import { Calendar, MapPin, TrendingUp, Zap, Heart, Activity, Clock, Mountain, Send, Bot, User } from "lucide-react"
+import { Calendar, MapPin, TrendingUp, Zap, Heart, Activity, Clock, Mountain, Send, Bot, User, Search, ChevronDown } from "lucide-react"
 
 interface RideDetails {
   id: number
@@ -34,36 +34,77 @@ interface RideDetails {
   description?: string
 }
 
+interface Activity {
+  id: number
+  strava_id: number
+  name: string
+  start_date: string
+  distance: number
+  moving_time: number
+  type: string
+}
+
 interface Message {
   role: 'user' | 'assistant'
   content: string
   timestamp: Date
 }
 
-export default function RideAnalysisPage() {
-  const params = useParams()
-  const rideId = params?.id
+function RideAnalyzerContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const initialRideId = searchParams.get('rideId')
 
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [selectedRideId, setSelectedRideId] = useState<string | null>(initialRideId)
   const [ride, setRide] = useState<RideDetails | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [loadingActivities, setLoadingActivities] = useState(true)
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState("")
   const [isAsking, setIsAsking] = useState(false)
+  const [showRideSelector, setShowRideSelector] = useState(!initialRideId)
+  const [searchTerm, setSearchTerm] = useState("")
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (rideId) {
-      fetchRideDetails()
-      fetchConversationHistory()
-    }
-  }, [rideId])
+    fetchActivities()
+  }, [])
 
   useEffect(() => {
-    // Scroll to bottom when new messages arrive
+    if (selectedRideId) {
+      fetchRideDetails(selectedRideId)
+      fetchConversationHistory(selectedRideId)
+      setShowRideSelector(false)
+    }
+  }, [selectedRideId])
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  async function fetchRideDetails() {
+  async function fetchActivities() {
+    try {
+      const response = await fetch('/api/strava/activities?lookback=year')
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch activities')
+      }
+      
+      const data = await response.json()
+      const sortedActivities = (data.activities || []).sort((a: Activity, b: Activity) => 
+        new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
+      )
+      setActivities(sortedActivities)
+    } catch (error) {
+      console.error('Error fetching activities:', error)
+    } finally {
+      setLoadingActivities(false)
+    }
+  }
+
+  async function fetchRideDetails(rideId: string) {
+    setLoading(true)
     try {
       const response = await fetch(`/api/rides/${rideId}`)
       
@@ -80,7 +121,7 @@ export default function RideAnalysisPage() {
     }
   }
 
-  async function fetchConversationHistory() {
+  async function fetchConversationHistory(rideId: string) {
     try {
       const response = await fetch(`/api/rides/${rideId}/analyze`)
       
@@ -109,7 +150,7 @@ export default function RideAnalysisPage() {
   }
 
   async function askQuestion() {
-    if (!inputValue.trim() || isAsking) return
+    if (!inputValue.trim() || isAsking || !selectedRideId) return
 
     const userMessage: Message = {
       role: 'user',
@@ -122,13 +163,12 @@ export default function RideAnalysisPage() {
     setIsAsking(true)
 
     try {
-      // Build conversation history for context
       const conversationHistory = messages.map(msg => ({
         role: msg.role,
         content: msg.content
       }))
 
-      const response = await fetch(`/api/rides/${rideId}/analyze`, {
+      const response = await fetch(`/api/rides/${selectedRideId}/analyze`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -172,7 +212,119 @@ export default function RideAnalysisPage() {
     }
   }
 
-  if (loading) {
+  function handleRideSelect(rideId: number) {
+    setSelectedRideId(rideId.toString())
+    setMessages([])
+    router.push(`/analyzer?rideId=${rideId}`, { scroll: false })
+  }
+
+  function handleChangeRide() {
+    setShowRideSelector(true)
+    setRide(null)
+    setMessages([])
+  }
+
+  const filteredActivities = activities.filter(activity => 
+    activity.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    new Date(activity.start_date).toLocaleDateString().includes(searchTerm)
+  )
+
+  if (showRideSelector) {
+    return (
+      <div className="min-h-screen bg-gradient-dark text-white">
+        <Nav />
+        
+        <main className="mx-auto max-w-7xl px-4 py-8">
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold mb-2">🤖 Ride Analyzer</h1>
+            <p className="text-gray-400">Select a ride to analyze with AI coaching insights</p>
+          </div>
+
+          {/* Search */}
+          <div className="mb-6">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <input
+                type="text"
+                placeholder="Search rides by name or date..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-gray-800/50 border border-gray-700 rounded-xl pl-12 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* Ride Selection */}
+          {loadingActivities ? (
+            <div className="text-center py-12">
+              <p className="text-gray-400">Loading your rides...</p>
+            </div>
+          ) : filteredActivities.length === 0 ? (
+            <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-12 text-center">
+              <h3 className="text-xl font-bold mb-2">No rides found</h3>
+              <p className="text-gray-400">
+                {searchTerm ? 'Try adjusting your search' : 'Connect your Strava account to see your rides'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredActivities.map((activity) => {
+                const distanceMiles = (activity.distance * 0.000621371).toFixed(1)
+                const durationHours = Math.floor(activity.moving_time / 3600)
+                const durationMinutes = Math.floor((activity.moving_time % 3600) / 60)
+
+                return (
+                  <button
+                    key={activity.id}
+                    onClick={() => handleRideSelect(activity.strava_id)}
+                    className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 hover:bg-gray-800 hover:border-purple-500 transition-all text-left group"
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-bold group-hover:text-purple-400 transition-colors mb-1">
+                          {activity.name}
+                        </h3>
+                        <div className="flex items-center gap-2 text-sm text-gray-400">
+                          <Calendar size={14} />
+                          <span>
+                            {new Date(activity.start_date).toLocaleDateString('en-US', { 
+                              weekday: 'short',
+                              month: 'short', 
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-purple-400">{distanceMiles}</div>
+                        <div className="text-xs text-gray-400">miles</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-gray-400">
+                      <div className="flex items-center gap-1">
+                        <Clock size={14} />
+                        <span>{durationHours}:{durationMinutes.toString().padStart(2, '0')}</span>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded ${
+                        activity.type === 'VirtualRide' 
+                          ? 'bg-blue-500/20 text-blue-300' 
+                          : 'bg-green-500/20 text-green-300'
+                      }`}>
+                        {activity.type === 'VirtualRide' ? 'Zwift' : 'Outdoor'}
+                      </span>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </main>
+      </div>
+    )
+  }
+
+  if (loading || !ride) {
     return (
       <div className="min-h-screen bg-gradient-dark">
         <Nav />
@@ -180,17 +332,6 @@ export default function RideAnalysisPage() {
           <div className="flex items-center justify-center h-96">
             <div className="text-white text-xl">Loading ride details...</div>
           </div>
-        </main>
-      </div>
-    )
-  }
-
-  if (!ride) {
-    return (
-      <div className="min-h-screen bg-gradient-dark">
-        <Nav />
-        <main className="mx-auto max-w-7xl px-4 py-8">
-          <div className="text-center text-white">Ride not found</div>
         </main>
       </div>
     )
@@ -237,18 +378,29 @@ export default function RideAnalysisPage() {
       <Nav />
       
       <main className="mx-auto max-w-7xl px-4 py-8">
-        {/* Header */}
+        {/* Header with Change Ride Button */}
         <div className="mb-8">
-          <div className="flex items-center gap-2 text-gray-400 mb-2">
-            <Calendar size={16} />
-            <span>{new Date(ride.start_date).toLocaleDateString('en-US', { 
-              weekday: 'long', 
-              year: 'numeric',
-              month: 'long', 
-              day: 'numeric' 
-            })}</span>
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <div className="flex items-center gap-2 text-gray-400 mb-2">
+                <Calendar size={16} />
+                <span>{new Date(ride.start_date).toLocaleDateString('en-US', { 
+                  weekday: 'long', 
+                  year: 'numeric',
+                  month: 'long', 
+                  day: 'numeric' 
+                })}</span>
+              </div>
+              <h1 className="text-4xl font-bold mb-2">{ride.name}</h1>
+            </div>
+            <button
+              onClick={handleChangeRide}
+              className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg border border-gray-700 flex items-center gap-2 transition-colors"
+            >
+              <ChevronDown size={16} />
+              Change Ride
+            </button>
           </div>
-          <h1 className="text-4xl font-bold mb-2">{ride.name}</h1>
         </div>
 
         {/* Key Metrics Grid */}
@@ -452,7 +604,7 @@ export default function RideAnalysisPage() {
 
         {/* Elevation Profile */}
         {hasChartData && (
-          <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur mb-8">
+          <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur">
             <h3 className="text-xl font-bold mb-4">Elevation Profile</h3>
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={chartData}>
@@ -474,72 +626,25 @@ export default function RideAnalysisPage() {
           </ResponsiveContainer>
         </div>
         )}
-
-        {/* Speed & Cadence */}
-        {hasChartData && (
-          <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur mb-8">
-            <h3 className="text-xl font-bold mb-4">Speed & Cadence</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="time" stroke="#9CA3AF" />
-              <YAxis yAxisId="left" stroke="#3B82F6" />
-              <YAxis yAxisId="right" orientation="right" stroke="#A78BFA" />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-                labelStyle={{ color: '#F3F4F6' }}
-              />
-              <Legend />
-              <Line yAxisId="left" type="monotone" dataKey="speed" stroke="#3B82F6" strokeWidth={2} dot={false} name="Speed (km/h)" />
-              <Line yAxisId="right" type="monotone" dataKey="cadence" stroke="#A78BFA" strokeWidth={2} dot={false} name="Cadence (rpm)" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        )}
-
-        {/* Advanced Metrics */}
-        {ride.intensity_factor && (
-          <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur">
-            <h3 className="text-xl font-bold mb-4">Advanced Metrics</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <div className="text-sm text-gray-400 mb-1">Intensity Factor (IF)</div>
-                <div className="text-3xl font-bold">{ride.intensity_factor.toFixed(2)}</div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {ride.intensity_factor < 0.75 ? 'Easy recovery' : 
-                   ride.intensity_factor < 0.85 ? 'Moderate endurance' :
-                   ride.intensity_factor < 0.95 ? 'Tempo effort' :
-                   ride.intensity_factor < 1.05 ? 'Threshold workout' : 'High intensity'}
-                </div>
-              </div>
-
-              {ride.variability_index && (
-                <div>
-                  <div className="text-sm text-gray-400 mb-1">Variability Index (VI)</div>
-                  <div className="text-3xl font-bold">{ride.variability_index.toFixed(2)}</div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {ride.variability_index < 1.05 ? 'Very steady pacing' :
-                     ride.variability_index < 1.10 ? 'Good pacing' :
-                     'Variable effort'}
-                  </div>
-                </div>
-              )}
-
-              {ride.kilojoules && (
-                <div>
-                  <div className="text-sm text-gray-400 mb-1">Work (kJ)</div>
-                  <div className="text-3xl font-bold">{ride.kilojoules}</div>
-                  <div className="text-xs text-gray-500 mt-1">≈ {Math.round(ride.kilojoules / 4.184)} calories</div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </main>
     </div>
   )
 }
 
-
-
+export default function RideAnalyzerPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-dark">
+        <Nav />
+        <main className="mx-auto max-w-7xl px-4 py-8">
+          <div className="flex items-center justify-center h-96">
+            <div className="text-white text-xl">Loading...</div>
+          </div>
+        </main>
+      </div>
+    }>
+      <RideAnalyzerContent />
+    </Suspense>
+  )
+}
 

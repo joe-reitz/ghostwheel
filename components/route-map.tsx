@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from 'react'
+import { GoogleMap, useJsApiLoader, Polyline } from '@react-google-maps/api'
 
 interface RouteMapProps {
   polyline?: string
@@ -12,54 +13,175 @@ interface RouteMapProps {
     averageSpeed: number
   }>
   height?: string
+  powerData?: number[]
+  ftp?: number
 }
 
 /**
- * Route Map Component
- * 
- * Currently shows a placeholder. To implement:
- * 1. Add Mapbox or Leaflet
- * 2. Decode Strava polyline
- * 3. Display route with gradient based on power/speed/HR
- * 4. Add interactive features (hover, click)
+ * Route Map Component with Google Maps
+ * Displays Strava routes with optional power-based gradient coloring
  */
-export function RouteMap({ polyline, activities, height = '400px' }: RouteMapProps) {
-  const [mapReady, setMapReady] = useState(false)
+export function RouteMap({ polyline, activities, height = '400px', powerData, ftp }: RouteMapProps) {
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
+  })
 
-  // TODO: Implement actual map
-  // Option 1: Mapbox (requires API key)
-  // Option 2: Leaflet + OpenStreetMap (free)
-  // Option 3: Google Maps (requires API key)
+  const [map, setMap] = useState<google.maps.Map | null>(null)
 
-  return (
-    <div 
-      className="bg-gray-800 rounded-lg overflow-hidden relative"
-      style={{ height }}
-    >
-      {/* Placeholder */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-4xl mb-4">🗺️</div>
-          <h3 className="text-xl font-bold mb-2">Route Map</h3>
-          <p className="text-gray-400 text-sm max-w-md px-4">
-            Interactive route maps with performance overlays coming soon!
-            <br />
-            See docs/MAPS.md for implementation guide.
+  if (loadError) {
+    return (
+      <div 
+        className="bg-gray-800 rounded-lg overflow-hidden relative flex items-center justify-center"
+        style={{ height }}
+      >
+        <div className="text-center p-4">
+          <div className="text-red-400 text-4xl mb-4">⚠️</div>
+          <p className="text-red-300">Error loading Google Maps</p>
+          <p className="text-gray-400 text-sm mt-2">
+            Check your NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in .env.local
           </p>
         </div>
       </div>
+    )
+  }
 
-      {/* Grid overlay for visual effect */}
+  if (!isLoaded) {
+    return (
       <div 
-        className="absolute inset-0 opacity-10"
-        style={{
-          backgroundImage: `
-            linear-gradient(rgba(139, 92, 246, 0.5) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(139, 92, 246, 0.5) 1px, transparent 1px)
-          `,
-          backgroundSize: '50px 50px'
-        }}
-      />
+        className="bg-gray-800 rounded-lg overflow-hidden relative flex items-center justify-center"
+        style={{ height }}
+      >
+        <div className="text-center">
+          <div className="text-4xl mb-4">🗺️</div>
+          <p className="text-gray-400">Loading map...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!polyline) {
+    return (
+      <div 
+        className="bg-gray-800 rounded-lg overflow-hidden relative flex items-center justify-center"
+        style={{ height }}
+      >
+        <div className="text-center">
+          <div className="text-4xl mb-4">🗺️</div>
+          <p className="text-gray-400">No route data available</p>
+        </div>
+      </div>
+    )
+  }
+
+  const coordinates = decodePolyline(polyline)
+  
+  if (coordinates.length === 0) {
+    return (
+      <div 
+        className="bg-gray-800 rounded-lg overflow-hidden relative flex items-center justify-center"
+        style={{ height }}
+      >
+        <div className="text-center">
+          <div className="text-4xl mb-4">🗺️</div>
+          <p className="text-gray-400">Invalid route data</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Convert to Google Maps LatLng format
+  const path = coordinates.map(coord => ({ lat: coord[0], lng: coord[1] }))
+  
+  // Calculate center point
+  const center = path[Math.floor(path.length / 2)]
+
+  const onLoad = (map: google.maps.Map) => {
+    // Fit bounds to show entire route
+    const bounds = new google.maps.LatLngBounds()
+    path.forEach(point => bounds.extend(point))
+    map.fitBounds(bounds)
+    setMap(map)
+  }
+
+  const onUnmount = () => {
+    setMap(null)
+  }
+
+  // Determine line color based on power data if available
+  const getRouteColor = () => {
+    if (powerData && powerData.length > 0 && ftp) {
+      const avgPower = powerData.reduce((a, b) => a + b, 0) / powerData.length
+      const intensity = avgPower / ftp
+      
+      if (intensity < 0.55) return '#3B82F6'  // Blue (Z1 - Recovery)
+      if (intensity < 0.75) return '#10B981'  // Green (Z2 - Endurance)
+      if (intensity < 0.90) return '#F59E0B'  // Orange (Z3 - Tempo)
+      if (intensity < 1.05) return '#EF4444'  // Red (Z4 - Threshold)
+      return '#DC2626'                        // Dark Red (Z5+ - VO2Max)
+    }
+    return '#8B5CF6' // Default purple
+  }
+
+  const mapContainerStyle = {
+    width: '100%',
+    height: height
+  }
+
+  const options: google.maps.MapOptions = {
+    mapTypeId: 'terrain',
+    disableDefaultUI: false,
+    zoomControl: true,
+    mapTypeControl: true,
+    scaleControl: true,
+    streetViewControl: false,
+    fullscreenControl: true,
+    styles: [
+      {
+        featureType: 'all',
+        elementType: 'geometry',
+        stylers: [{ color: '#242f3e' }]
+      },
+      {
+        featureType: 'all',
+        elementType: 'labels.text.stroke',
+        stylers: [{ color: '#242f3e' }]
+      },
+      {
+        featureType: 'all',
+        elementType: 'labels.text.fill',
+        stylers: [{ color: '#746855' }]
+      },
+      {
+        featureType: 'water',
+        elementType: 'geometry',
+        stylers: [{ color: '#17263c' }]
+      }
+    ]
+  }
+
+  const polylineOptions = {
+    strokeColor: getRouteColor(),
+    strokeOpacity: 0.9,
+    strokeWeight: 4,
+    geodesic: true
+  }
+
+  return (
+    <div className="rounded-lg overflow-hidden">
+      <GoogleMap
+        mapContainerStyle={mapContainerStyle}
+        center={center}
+        zoom={13}
+        onLoad={onLoad}
+        onUnmount={onUnmount}
+        options={options}
+      >
+        <Polyline
+          path={path}
+          options={polylineOptions}
+        />
+      </GoogleMap>
     </div>
   )
 }

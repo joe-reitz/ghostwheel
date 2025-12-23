@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Nav } from "@/components/nav"
+import { RouteMap } from "@/components/route-map"
 import { 
   LineChart, Line, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
@@ -73,27 +74,38 @@ export default function LatestRidePage() {
   async function fetchLatestRide() {
     try {
       // Fetch activities to get the latest one
-      const response = await fetch('/api/strava/activities?lookback=month&limit=1')
+      const response = await fetch('/api/strava/activities?lookback=month')
       
       if (!response.ok) {
+        console.error('Failed to fetch activities:', response.status, response.statusText)
         throw new Error('Failed to fetch activities')
       }
       
       const data = await response.json()
+      console.log('Activities response:', data)
       
-      if (data.activities && data.activities.length > 0) {
-        const latestActivity = data.activities[0]
+      // Handle both array and object with activities property
+      const activitiesList = Array.isArray(data) ? data : (data.activities || [])
+      
+      if (activitiesList && activitiesList.length > 0) {
+        const latestActivity = activitiesList[0]
+        console.log('Latest activity:', latestActivity)
         
         // Fetch full details for this ride
         const detailsResponse = await fetch(`/api/rides/${latestActivity.strava_id}`)
         
         if (detailsResponse.ok) {
           const rideData = await detailsResponse.json()
+          console.log('Ride data:', rideData)
           setRide(rideData)
           
           // Fetch conversation history
           await fetchConversationHistory(latestActivity.strava_id)
+        } else {
+          console.error('Failed to fetch ride details:', detailsResponse.status)
         }
+      } else {
+        console.log('No activities found')
       }
     } catch (error) {
       console.error('Error fetching latest ride:', error)
@@ -265,6 +277,16 @@ export default function LatestRidePage() {
           </div>
           <h2 className="text-2xl font-semibold text-purple-400">{ride.name}</h2>
         </div>
+
+        {/* Route Map */}
+        {ride.summary_polyline && (
+          <div className="mb-8">
+            <RouteMap 
+              polyline={ride.summary_polyline} 
+              height="400px"
+            />
+          </div>
+        )}
 
         {/* Key Metrics Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-8">
@@ -448,4 +470,6 @@ export default function LatestRidePage() {
     </div>
   )
 }
+
+
 

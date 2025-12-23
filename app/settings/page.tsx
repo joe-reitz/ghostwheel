@@ -226,16 +226,18 @@ export default function SettingsPage() {
           </div>
 
           {/* Calculated Metrics */}
-          {settings.ftp && settings.weight && (
+          {(settings.ftp && settings.weight) || (settings.maxHr && settings.restingHr) || (settings.weight && settings.bikeWeight) ? (
             <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-6 mb-6">
               <h3 className="font-bold text-lg mb-3">📊 Your Metrics</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div>
-                  <div className="text-2xl font-bold text-purple-400">
-                    {(settings.ftp / settings.weight).toFixed(2)}
+                {settings.ftp && settings.weight && (
+                  <div>
+                    <div className="text-2xl font-bold text-purple-400">
+                      {(settings.ftp / settings.weight).toFixed(2)}
+                    </div>
+                    <div className="text-sm text-gray-400">W/kg (Power-to-Weight)</div>
                   </div>
-                  <div className="text-sm text-gray-400">W/kg (Power-to-Weight)</div>
-                </div>
+                )}
                 {settings.maxHr && settings.restingHr && (
                   <div>
                     <div className="text-2xl font-bold text-red-400">
@@ -244,7 +246,7 @@ export default function SettingsPage() {
                     <div className="text-sm text-gray-400">HR Reserve</div>
                   </div>
                 )}
-                {settings.bikeWeight && (
+                {settings.weight && settings.bikeWeight && (
                   <div>
                     <div className="text-2xl font-bold text-blue-400">
                       {((settings.weight + settings.bikeWeight) * 2.20462).toFixed(1)}
@@ -254,7 +256,7 @@ export default function SettingsPage() {
                 )}
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* Save Button */}
           <div className="flex gap-4">

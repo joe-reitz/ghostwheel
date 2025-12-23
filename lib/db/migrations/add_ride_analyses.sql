@@ -17,3 +17,5 @@ CREATE INDEX IF NOT EXISTS idx_ride_analyses_user_activity
 
 
 
+
+

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Nav } from "@/components/nav"
+import { RouteMap } from "@/components/route-map"
 import { 
   LineChart, Line, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
@@ -402,6 +403,18 @@ function RideAnalyzerContent() {
             </button>
           </div>
         </div>
+
+        {/* Route Map */}
+        {ride.summary_polyline && (
+          <div className="mb-8">
+            <RouteMap 
+              polyline={ride.summary_polyline} 
+              height="400px"
+              powerData={chartData.map((d: any) => d.power)}
+              ftp={undefined}
+            />
+          </div>
+        )}
 
         {/* Key Metrics Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-8">

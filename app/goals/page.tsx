@@ -80,14 +80,28 @@ export default function GoalsPage() {
 
   async function createGoal() {
     try {
-      // TODO: Implement create goal API
-      // const response = await fetch('/api/goals', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(formData)
-      // })
-      // const data = await response.json()
-      // setGoals([data.goal, ...goals])
+      const response = await fetch('/api/goals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          type: formData.type,
+          targetValue: formData.targetValue,
+          targetDate: formData.targetDate,
+          description: formData.description
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to create goal')
+      }
+      
+      const data = await response.json()
+      
+      // Add new goal to the list
+      setGoals([data.goal, ...goals])
+      
+      // Reset form and close
       setShowForm(false)
       setFormData({
         name: '',
@@ -98,6 +112,7 @@ export default function GoalsPage() {
       })
     } catch (error) {
       console.error('Error creating goal:', error)
+      alert('Failed to create goal. Please try again.')
     }
   }
 

@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getIronSession } from 'iron-session';
-import { SessionData, sessionOptions } from '@/lib/session';
+import { getSessionUser } from '@/lib/session';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getIronSession<SessionData>(request, NextResponse.next().cookies, sessionOptions);
+    const user = await getSessionUser();
     
-    if (!session.accessToken) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -20,7 +19,7 @@ export async function GET(
       `https://www.strava.com/api/v3/activities/${activityId}`,
       {
         headers: {
-          Authorization: `Bearer ${session.accessToken}`,
+          Authorization: `Bearer ${user.accessToken}`,
         },
       }
     );
@@ -34,10 +33,13 @@ export async function GET(
     // Calculate additional metrics if power data is available
     let tss, intensityFactor, variabilityIndex;
     
-    if (activity.weighted_average_watts && activity.moving_time) {
-      // Fetch user's FTP to calculate IF and TSS
-      // For now, we'll skip this calculation or use a default FTP
-      // This should ideally come from user settings
+    if (activity.weighted_average_watts && activity.moving_time && user.ftp) {
+      const np = activity.weighted_average_watts;
+      const ftp = user.ftp;
+      const hours = activity.moving_time / 3600;
+      
+      intensityFactor = np / ftp;
+      tss = (activity.moving_time * np * intensityFactor) / (ftp * 36);
     }
 
     return NextResponse.json({

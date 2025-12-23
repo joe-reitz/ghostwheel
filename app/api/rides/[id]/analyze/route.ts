@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getIronSession } from 'iron-session';
-import { SessionData, sessionOptions } from '@/lib/session';
+import { getSessionUser } from '@/lib/session';
 import OpenAI from 'openai';
-import { db } from '@/lib/db';
+import { sql } from '@/lib/db';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -13,9 +12,9 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getIronSession<SessionData>(request, NextResponse.next().cookies, sessionOptions);
+    const user = await getSessionUser();
     
-    if (!session.accessToken) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -27,7 +26,7 @@ export async function POST(
       `https://www.strava.com/api/v3/activities/${activityId}`,
       {
         headers: {
-          Authorization: `Bearer ${session.accessToken}`,
+          Authorization: `Bearer ${user.accessToken}`,
         },
       }
     );
@@ -39,52 +38,46 @@ export async function POST(
     const activity = await stravaResponse.json();
 
     // Fetch user profile and training context
-    const userId = session.userId;
+    const userId = user.id;
     let userContext = '';
     
     try {
-      // Get user settings for FTP, max HR, etc.
-      const settingsResult = await db.query(
-        'SELECT ftp, max_hr, resting_hr FROM users WHERE id = $1',
-        [userId]
-      );
-      
-      if (settingsResult.rows.length > 0) {
-        const settings = settingsResult.rows[0];
-        userContext += `\n\nUser Profile:\n- FTP: ${settings.ftp || 'Not set'}W\n- Max HR: ${settings.max_hr || 'Not set'} bpm`;
+      // User profile info (already have from session)
+      if (user.ftp || user.maxHr) {
+        userContext += '\n\nUser Profile:';
+        if (user.ftp) userContext += `\n- FTP: ${user.ftp}W`;
+        if (user.maxHr) userContext += `\n- Max HR: ${user.maxHr} bpm`;
       }
 
       // Get recent activities for context
-      const recentActivitiesResult = await db.query(
-        `SELECT name, distance, moving_time, total_elevation_gain, average_speed, 
-                average_watts, average_heartrate, tss, start_date
-         FROM activities 
-         WHERE user_id = $1 AND start_date < $2
-         ORDER BY start_date DESC 
-         LIMIT 5`,
-        [userId, activity.start_date]
-      );
+      const recentActivities = await sql`
+        SELECT name, distance, moving_time, total_elevation_gain, average_speed, 
+               average_watts, average_heartrate, tss, start_date
+        FROM activities 
+        WHERE user_id = ${userId} AND start_date < ${activity.start_date}
+        ORDER BY start_date DESC 
+        LIMIT 5
+      `;
 
-      if (recentActivitiesResult.rows.length > 0) {
+      if (recentActivities.rows.length > 0) {
         userContext += '\n\nRecent Training History (5 rides before this one):';
-        recentActivitiesResult.rows.forEach((ride: any, idx: number) => {
+        recentActivities.rows.forEach((ride: any, idx: number) => {
           userContext += `\n${idx + 1}. ${ride.name}: ${(ride.distance/1000).toFixed(1)}km, ${(ride.moving_time/3600).toFixed(1)}h`;
-          if (ride.average_watts) userContext += `, ${ride.average_watts}W avg`;
-          if (ride.tss) userContext += `, TSS ${ride.tss}`;
+          if (ride.average_watts) userContext += `, ${Math.round(ride.average_watts)}W avg`;
+          if (ride.tss) userContext += `, TSS ${Math.round(ride.tss)}`;
         });
       }
 
       // Get goals
-      const goalsResult = await db.query(
-        `SELECT name, target_date, target_distance, goal_type 
-         FROM goals 
-         WHERE user_id = $1 AND status = 'active'`,
-        [userId]
-      );
+      const goals = await sql`
+        SELECT name, target_date, target_value, type 
+        FROM goals 
+        WHERE user_id = ${userId} AND status = 'active'
+      `;
 
-      if (goalsResult.rows.length > 0) {
+      if (goals.rows.length > 0) {
         userContext += '\n\nActive Goals:';
-        goalsResult.rows.forEach((goal: any) => {
+        goals.rows.forEach((goal: any) => {
           userContext += `\n- ${goal.name}`;
           if (goal.target_date) userContext += ` (${new Date(goal.target_date).toLocaleDateString()})`;
         });
@@ -158,11 +151,10 @@ Keep responses concise but informative (2-4 paragraphs unless more detail is spe
 
     // Store the interaction in the database for future reference
     try {
-      await db.query(
-        `INSERT INTO ride_analyses (user_id, activity_id, user_prompt, ai_response, created_at)
-         VALUES ($1, $2, $3, $4, NOW())`,
-        [userId, activityId, userPrompt, aiResponse]
-      );
+      await sql`
+        INSERT INTO ride_analyses (user_id, activity_id, user_prompt, ai_response, created_at)
+        VALUES (${userId}, ${activityId}, ${userPrompt}, ${aiResponse}, NOW())
+      `;
     } catch (error) {
       console.error('Error storing analysis:', error);
       // Continue even if storage fails
@@ -192,23 +184,22 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getIronSession<SessionData>(request, NextResponse.next().cookies, sessionOptions);
+    const user = await getSessionUser();
     
-    if (!session.accessToken) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const activityId = params.id;
-    const userId = session.userId;
+    const userId = user.id;
 
     // Get conversation history
-    const result = await db.query(
-      `SELECT user_prompt, ai_response, created_at 
-       FROM ride_analyses 
-       WHERE user_id = $1 AND activity_id = $2 
-       ORDER BY created_at ASC`,
-      [userId, activityId]
-    );
+    const result = await sql`
+      SELECT user_prompt, ai_response, created_at 
+      FROM ride_analyses 
+      WHERE user_id = ${userId} AND activity_id = ${activityId}
+      ORDER BY created_at ASC
+    `;
 
     return NextResponse.json({
       history: result.rows

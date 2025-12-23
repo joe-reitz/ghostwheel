@@ -13,6 +13,7 @@ import { Calendar, MapPin, TrendingUp, Zap, Heart, Activity, Clock, Mountain, Se
 interface RideDetails {
   id: number
   name: string
+  type?: string // Ride or VirtualRide
   start_date: string
   distance: number
   moving_time: number
@@ -33,6 +34,7 @@ interface RideDetails {
   stream_data?: any
   summary_polyline?: string
   description?: string
+  ftp?: number
 }
 
 interface Activity {
@@ -60,14 +62,16 @@ function RideAnalyzerContent() {
   const [selectedRideId, setSelectedRideId] = useState<string | null>(initialRideId)
   const [ride, setRide] = useState<RideDetails | null>(null)
   const [loading, setLoading] = useState(false)
-  const [loadingActivities, setLoadingActivities] = useState(!initialRideId) // Don't load if we have a rideId
+  const [loadingActivities, setLoadingActivities] = useState(true) // Always load for dropdown
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState("")
   const [isAsking, setIsAsking] = useState(false)
   const [showRideSelector, setShowRideSelector] = useState(!initialRideId)
   const [searchTerm, setSearchTerm] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [showDropdown, setShowDropdown] = useState(false) // For dropdown menu
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   // Redirect if no rideId provided
   useEffect(() => {
@@ -77,12 +81,21 @@ function RideAnalyzerContent() {
     }
   }, [])
 
+  // Always fetch activities for dropdown
   useEffect(() => {
-    // Only fetch activities if we don't have a specific ride selected
-    if (!initialRideId || initialRideId === 'undefined') {
-      fetchActivities()
+    fetchActivities()
+  }, [])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false)
+      }
     }
-  }, [initialRideId])
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   useEffect(() => {
     if (selectedRideId && selectedRideId !== 'undefined') {
@@ -236,6 +249,7 @@ function RideAnalyzerContent() {
   function handleRideSelect(rideId: number) {
     setSelectedRideId(rideId.toString())
     setMessages([])
+    setShowDropdown(false) // Close dropdown
     router.push(`/analyzer?rideId=${rideId}`, { scroll: false })
   }
 
@@ -432,7 +446,7 @@ function RideAnalyzerContent() {
       <Nav />
       
       <main className="mx-auto max-w-7xl px-4 py-8">
-        {/* Header with Change Ride Button */}
+        {/* Header with Ride Dropdown */}
         <div className="mb-8">
           <div className="flex justify-between items-start mb-4">
             <div>
@@ -447,27 +461,103 @@ function RideAnalyzerContent() {
               </div>
               <h1 className="text-4xl font-bold mb-2">{ride.name}</h1>
             </div>
-            <button
-              onClick={handleChangeRide}
-              className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg border border-gray-700 flex items-center gap-2 transition-colors"
-            >
-              <ChevronDown size={16} />
-              Change Ride
-            </button>
+            
+            {/* Ride Selector Dropdown */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setShowDropdown(!showDropdown)}
+                className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg border border-gray-700 flex items-center gap-2 transition-colors min-w-[200px] justify-between"
+              >
+                <span className="truncate">Change Ride</span>
+                <ChevronDown size={16} className={`transition-transform ${showDropdown ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {showDropdown && (
+                <div className="absolute right-0 mt-2 w-96 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 max-h-[500px] overflow-hidden flex flex-col">
+                  {/* Search */}
+                  <div className="p-3 border-b border-gray-700">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                      <input
+                        type="text"
+                        placeholder="Search rides..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-10 pr-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 text-sm"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Rides List */}
+                  <div className="overflow-y-auto">
+                    {loadingActivities ? (
+                      <div className="p-4 text-center text-gray-400">Loading rides...</div>
+                    ) : filteredActivities.length === 0 ? (
+                      <div className="p-4 text-center text-gray-400">
+                        {searchTerm ? 'No rides found' : 'No rides available'}
+                      </div>
+                    ) : (
+                      filteredActivities.slice(0, 20).map((activity) => {
+                        const distanceMiles = (activity.distance * 0.000621371).toFixed(1)
+                        const isSelected = activity.strava_id.toString() === selectedRideId
+                        
+                        return (
+                          <button
+                            key={activity.id}
+                            onClick={() => handleRideSelect(activity.strava_id)}
+                            className={`w-full text-left p-3 hover:bg-gray-700 transition-colors border-b border-gray-700 last:border-b-0 ${
+                              isSelected ? 'bg-purple-900/30' : ''
+                            }`}
+                          >
+                            <div className="flex justify-between items-start gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-white text-sm truncate mb-1">
+                                  {activity.name}
+                                </div>
+                                <div className="flex items-center gap-2 text-xs text-gray-400">
+                                  <Calendar size={12} />
+                                  <span>
+                                    {new Date(activity.start_date).toLocaleDateString('en-US', { 
+                                      month: 'short', 
+                                      day: 'numeric'
+                                    })}
+                                  </span>
+                                  <span className={`px-1.5 py-0.5 rounded text-xs ${
+                                    activity.type === 'VirtualRide' 
+                                      ? 'bg-blue-500/20 text-blue-300' 
+                                      : 'bg-green-500/20 text-green-300'
+                                  }`}>
+                                    {activity.type === 'VirtualRide' ? 'Zwift' : 'Outdoor'}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-bold text-purple-400">{distanceMiles}</div>
+                                <div className="text-xs text-gray-400">mi</div>
+                              </div>
+                            </div>
+                          </button>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Route Map */}
-        {ride.summary_polyline && (
-          <div className="mb-8">
-            <RouteMap 
-              polyline={ride.summary_polyline} 
-              height="400px"
-              powerData={chartData.map((d: any) => d.power)}
-              ftp={undefined}
-            />
-          </div>
-        )}
+        <div className="mb-8">
+          <RouteMap 
+            polyline={ride.summary_polyline} 
+            height="400px"
+            powerData={chartData.map((d: any) => d.power)}
+            ftp={ride.ftp}
+            isVirtualRide={ride.type === 'VirtualRide'}
+            rideName={ride.name}
+          />
+        </div>
 
         {/* Key Metrics Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-8">

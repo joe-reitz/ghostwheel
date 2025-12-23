@@ -13,6 +13,7 @@ import { Calendar, TrendingUp, Zap, Heart, Activity, Clock, Mountain, Send, Bot,
 interface RideDetails {
   id: number
   name: string
+  type?: string // Ride or VirtualRide
   start_date: string
   distance: number
   moving_time: number
@@ -33,6 +34,7 @@ interface RideDetails {
   stream_data?: any
   summary_polyline?: string
   description?: string
+  ftp?: number
 }
 
 interface Message {
@@ -247,6 +249,34 @@ export default function LatestRidePage() {
   const durationHours = Math.floor(ride.moving_time / 3600)
   const durationMinutes = Math.floor((ride.moving_time % 3600) / 60)
 
+  // Process stream data for charts
+  let chartData = []
+  if (ride.stream_data) {
+    const streams = ride.stream_data
+    const timeData = streams.time?.data || []
+    const powerData = streams.watts?.data || []
+    const hrData = streams.heartrate?.data || []
+    const speedData = streams.velocity_smooth?.data || []
+    const cadenceData = streams.cadence?.data || []
+    const altitudeData = streams.altitude?.data || []
+
+    // Create chart data points (sample every 10th point to reduce data size)
+    const sampleRate = Math.max(1, Math.floor(timeData.length / 200))
+    chartData = timeData
+      .filter((_: any, i: number) => i % sampleRate === 0)
+      .map((time: number, i: number) => {
+        const idx = i * sampleRate
+        return {
+          time: Math.round(time / 60), // Convert to minutes
+          power: powerData[idx] || 0,
+          hr: hrData[idx] || 0,
+          speed: speedData[idx] ? (speedData[idx] * 3.6).toFixed(1) : 0, // Convert m/s to km/h
+          cadence: cadenceData[idx] || 0,
+          elevation: altitudeData[idx] || 0
+        }
+      })
+  }
+
   return (
     <div className="min-h-screen bg-gradient-dark text-white">
       <Nav />
@@ -279,14 +309,16 @@ export default function LatestRidePage() {
         </div>
 
         {/* Route Map */}
-        {ride.summary_polyline && (
-          <div className="mb-8">
-            <RouteMap 
-              polyline={ride.summary_polyline} 
-              height="400px"
-            />
-          </div>
-        )}
+        <div className="mb-8">
+          <RouteMap 
+            polyline={ride.summary_polyline} 
+            height="400px"
+            powerData={chartData.map((d: any) => d.power)}
+            ftp={ride.ftp}
+            isVirtualRide={ride.type === 'VirtualRide'}
+            rideName={ride.name}
+          />
+        </div>
 
         {/* Key Metrics Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-8">

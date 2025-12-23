@@ -15,19 +15,62 @@ interface RouteMapProps {
   height?: string
   powerData?: number[]
   ftp?: number
+  isVirtualRide?: boolean // Flag for Zwift/virtual rides
+  rideName?: string // Ride name to detect Zwift world
 }
 
 /**
  * Route Map Component with Google Maps
  * Displays Strava routes with optional power-based gradient coloring
+ * Shows custom visualization for Zwift/virtual rides
  */
-export function RouteMap({ polyline, activities, height = '400px', powerData, ftp }: RouteMapProps) {
+export function RouteMap({ polyline, activities, height = '400px', powerData, ftp, isVirtualRide = false, rideName = '' }: RouteMapProps) {
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+    libraries: ['places'], // Specify libraries to avoid warnings
+    version: 'weekly', // Use weekly version for latest features
   })
 
   const [map, setMap] = useState<google.maps.Map | null>(null)
+
+  // Detect Zwift world from ride name
+  const getZwiftWorld = (name: string): string | null => {
+    const nameLower = name.toLowerCase()
+    if (nameLower.includes('watopia')) return 'Watopia'
+    if (nameLower.includes('london')) return 'London'
+    if (nameLower.includes('new york')) return 'New York'
+    if (nameLower.includes('innsbruck')) return 'Innsbruck'
+    if (nameLower.includes('yorkshire')) return 'Yorkshire'
+    if (nameLower.includes('richmond')) return 'Richmond'
+    if (nameLower.includes('france')) return 'France'
+    if (nameLower.includes('paris')) return 'Paris'
+    if (nameLower.includes('makuri')) return 'Makuri Islands'
+    if (nameLower.includes('scotland')) return 'Scotland'
+    return null
+  }
+
+  // Show Zwift placeholder for virtual rides without real GPS data
+  if (isVirtualRide && !polyline) {
+    const zwiftWorld = getZwiftWorld(rideName)
+    return (
+      <div 
+        className="bg-gradient-to-br from-blue-900 via-purple-900 to-blue-900 rounded-lg overflow-hidden relative flex items-center justify-center border-2 border-purple-500"
+        style={{ height }}
+      >
+        <div className="text-center p-6">
+          <div className="text-6xl mb-4">🎮</div>
+          <h3 className="text-2xl font-bold text-white mb-2">Zwift Virtual Ride</h3>
+          {zwiftWorld && (
+            <p className="text-purple-300 text-lg mb-3">📍 {zwiftWorld}</p>
+          )}
+          <p className="text-gray-300 text-sm">
+            Virtual rides don't have GPS data
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   if (loadError) {
     return (

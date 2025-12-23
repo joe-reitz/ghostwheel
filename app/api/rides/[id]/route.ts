@@ -55,6 +55,7 @@ export async function GET(
     return NextResponse.json({
       id: activity.id,
       name: activity.name,
+      type: activity.type, // Add type to detect Zwift/VirtualRide
       start_date: activity.start_date,
       distance: activity.distance,
       moving_time: activity.moving_time,
@@ -78,6 +79,7 @@ export async function GET(
       intensity_factor: intensityFactor,
       variability_index: variabilityIndex,
       stream_data: streamData,
+      ftp: user.ftp, // Include user's FTP for power calculations
     });
 
   } catch (error) {

@@ -9,7 +9,7 @@ const openai = new OpenAI({
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getSessionUser();
@@ -19,7 +19,7 @@ export async function POST(
     }
 
     const { userPrompt, conversationHistory } = await request.json();
-    const activityId = params.id;
+    const { id: activityId } = await params;
 
     // Fetch activity details from Strava
     const stravaResponse = await fetch(
@@ -181,7 +181,7 @@ Keep responses concise but informative (2-4 paragraphs unless more detail is spe
 // Get previous conversation history for a ride
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getSessionUser();
@@ -190,7 +190,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const activityId = params.id;
+    const { id: activityId } = await params;
     const userId = user.id;
 
     // Get conversation history

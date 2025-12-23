@@ -3,7 +3,7 @@ import { getSessionUser } from '@/lib/session';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getSessionUser();
@@ -12,7 +12,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const activityId = params.id;
+    const { id: activityId } = await params;
 
     // Fetch activity details from Strava
     const response = await fetch(

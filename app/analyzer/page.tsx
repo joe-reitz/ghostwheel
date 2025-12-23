@@ -286,7 +286,7 @@ function RideAnalyzerContent() {
                 return (
                   <button
                     key={activity.id}
-                    onClick={() => handleRideSelect(activity.id)}
+                    onClick={() => handleRideSelect(activity.strava_id)}
                     className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 hover:bg-gray-800 hover:border-purple-500 transition-all text-left group"
                   >
                     <div className="flex justify-between items-start mb-3">

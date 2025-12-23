@@ -12,6 +12,7 @@ import { Calendar, TrendingUp, Zap, Heart, Target, Activity, RefreshCw, Bot } fr
 
 interface ActivityData {
   id: number
+  strava_id: number
   name: string
   start_date: string
   distance: number
@@ -422,7 +423,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <button
-                      onClick={() => router.push(`/analyzer?rideId=${activity.id}`)}
+                      onClick={() => router.push(`/analyzer?rideId=${activity.strava_id}`)}
                       className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm"
                     >
                       <Bot size={16} />

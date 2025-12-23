@@ -13,6 +13,7 @@ import { Calendar, TrendingUp, Zap, Heart, Activity, Clock, Mountain, Send, Bot,
 interface RideDetails {
   id: number
   name: string
+  type?: string // Ride or VirtualRide
   start_date: string
   distance: number
   moving_time: number
@@ -33,6 +34,7 @@ interface RideDetails {
   stream_data?: any
   summary_polyline?: string
   description?: string
+  ftp?: number
 }
 
 interface Message {
@@ -279,14 +281,16 @@ export default function LatestRidePage() {
         </div>
 
         {/* Route Map */}
-        {ride.summary_polyline && (
-          <div className="mb-8">
-            <RouteMap 
-              polyline={ride.summary_polyline} 
-              height="400px"
-            />
-          </div>
-        )}
+        <div className="mb-8">
+          <RouteMap 
+            polyline={ride.summary_polyline} 
+            height="400px"
+            powerData={chartData.map((d: any) => d.power)}
+            ftp={ride.ftp}
+            isVirtualRide={ride.type === 'VirtualRide'}
+            rideName={ride.name}
+          />
+        </div>
 
         {/* Key Metrics Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-8">

@@ -60,20 +60,32 @@ function RideAnalyzerContent() {
   const [selectedRideId, setSelectedRideId] = useState<string | null>(initialRideId)
   const [ride, setRide] = useState<RideDetails | null>(null)
   const [loading, setLoading] = useState(false)
-  const [loadingActivities, setLoadingActivities] = useState(true)
+  const [loadingActivities, setLoadingActivities] = useState(!initialRideId) // Don't load if we have a rideId
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState("")
   const [isAsking, setIsAsking] = useState(false)
   const [showRideSelector, setShowRideSelector] = useState(!initialRideId)
   const [searchTerm, setSearchTerm] = useState("")
+  const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  // Redirect if no rideId provided
   useEffect(() => {
-    fetchActivities()
+    if (!initialRideId || initialRideId === 'undefined') {
+      console.error('No valid ride ID provided, redirecting to rides page')
+      router.push('/rides')
+    }
   }, [])
 
   useEffect(() => {
-    if (selectedRideId) {
+    // Only fetch activities if we don't have a specific ride selected
+    if (!initialRideId || initialRideId === 'undefined') {
+      fetchActivities()
+    }
+  }, [initialRideId])
+
+  useEffect(() => {
+    if (selectedRideId && selectedRideId !== 'undefined') {
       fetchRideDetails(selectedRideId)
       fetchConversationHistory(selectedRideId)
       setShowRideSelector(false)
@@ -105,18 +117,26 @@ function RideAnalyzerContent() {
   }
 
   async function fetchRideDetails(rideId: string) {
+    if (!rideId || rideId === 'undefined') {
+      setError('Invalid ride ID')
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
+    setError(null)
     try {
       const response = await fetch(`/api/rides/${rideId}`)
       
       if (!response.ok) {
-        throw new Error('Failed to fetch ride details')
+        throw new Error(`Failed to fetch ride details (${response.status})`)
       }
       
       const data = await response.json()
       setRide(data)
     } catch (error) {
       console.error('Error fetching ride:', error)
+      setError('Failed to load ride details. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -223,6 +243,39 @@ function RideAnalyzerContent() {
     setShowRideSelector(true)
     setRide(null)
     setMessages([])
+  }
+
+  if (!initialRideId || initialRideId === 'undefined') {
+    return (
+      <div className="min-h-screen bg-gradient-dark">
+        <Nav />
+        <main className="mx-auto max-w-7xl px-4 py-8">
+          <div className="flex items-center justify-center h-96">
+            <div className="text-white text-xl">Redirecting...</div>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-dark">
+        <Nav />
+        <main className="mx-auto max-w-7xl px-4 py-8">
+          <div className="text-center text-white">
+            <h2 className="text-2xl font-bold mb-4 text-red-400">Error Loading Ride</h2>
+            <p className="text-gray-400 mb-6">{error}</p>
+            <button
+              onClick={() => router.push('/rides')}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg transition-colors"
+            >
+              Back to Rides
+            </button>
+          </div>
+        </main>
+      </div>
+    )
   }
 
   const filteredActivities = activities.filter(activity => 

@@ -104,6 +104,9 @@ export async function GET() {
     await sql`ALTER TABLE activities ADD COLUMN IF NOT EXISTS bike_id INTEGER REFERENCES bikes(id) ON DELETE SET NULL`;
     await sql`ALTER TABLE activities ADD COLUMN IF NOT EXISTS strava_gear_id VARCHAR(50)`;
 
+    console.log('Adding install_activity_id to components...');
+    await sql`ALTER TABLE components ADD COLUMN IF NOT EXISTS install_activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL`;
+
     console.log('Creating triggers...');
     await sql`
       CREATE OR REPLACE FUNCTION update_updated_at_column()

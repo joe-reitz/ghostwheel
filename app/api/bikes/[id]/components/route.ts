@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/session';
-import { getBikeComponents, createComponent, getBikeById } from '@/lib/db';
+import { getBikeComponents, createComponent, getBikeById, calculateInstallDistanceFromActivity } from '@/lib/db';
 
 export async function GET(
   request: Request,
@@ -33,6 +33,20 @@ export async function POST(
       return NextResponse.json({ error: 'Bike not found' }, { status: 404 });
     }
 
+    // Determine install_distance:
+    // 1. If installActivityId provided, calculate from that ride
+    // 2. If installDistance explicitly provided, use it
+    // 3. Default to 0 (all-time tracking)
+    let installDistance = 0;
+    let installActivityId: number | undefined;
+
+    if (body.installActivityId) {
+      installActivityId = body.installActivityId;
+      installDistance = await calculateInstallDistanceFromActivity(Number(id), body.installActivityId);
+    } else if (body.installDistance !== undefined && body.installDistance !== null) {
+      installDistance = body.installDistance;
+    }
+
     const component = await createComponent({
       userId: user.id,
       bikeId: Number(id),
@@ -40,7 +54,8 @@ export async function POST(
       brand: body.brand,
       model: body.model,
       installDate: body.installDate,
-      installDistance: body.installDistance || Number(bike.total_distance),
+      installDistance,
+      installActivityId,
       expectedLifetimeDistance: body.expectedLifetimeDistance,
       expectedLifetimeDays: body.expectedLifetimeDays,
       notes: body.notes,

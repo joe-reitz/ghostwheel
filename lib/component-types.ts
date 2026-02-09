@@ -29,6 +29,12 @@ export const COMPONENT_TYPES: ComponentTypeInfo[] = [
     description: 'Front chainrings — last significantly longer than cassettes'
   },
   {
+    id: 'rear_derailleur',
+    name: 'Rear Derailleur',
+    defaultLifetimeDistance: 15000 * MI,
+    description: 'Rear derailleur — inspect for hanger alignment and pivot wear'
+  },
+  {
     id: 'tires_front',
     name: 'Front Tire',
     defaultLifetimeDistance: 3500 * MI,

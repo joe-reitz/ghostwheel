@@ -31,12 +31,21 @@ interface ComponentData {
   expected_lifetime_days?: number
   status: string
   notes?: string
+  install_activity_name?: string
+}
+
+interface BikeActivity {
+  id: number
+  name: string
+  start_date: string
+  distance: number
 }
 
 const COMPONENT_OPTIONS = [
   { id: 'chain', name: 'Chain', defaultMiles: 2000 },
   { id: 'cassette', name: 'Cassette', defaultMiles: 5000 },
   { id: 'chainrings', name: 'Chainrings', defaultMiles: 10000 },
+  { id: 'rear_derailleur', name: 'Rear Derailleur', defaultMiles: 15000 },
   { id: 'tires_front', name: 'Front Tire', defaultMiles: 3500 },
   { id: 'tires_rear', name: 'Rear Tire', defaultMiles: 3000 },
   { id: 'brake_pads', name: 'Brake Pads', defaultMiles: 1000 },
@@ -62,7 +71,8 @@ export default function BikeDetailPage() {
   const [allBikes, setAllBikes] = useState<BikeData[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddComponent, setShowAddComponent] = useState(false)
-  const [newComp, setNewComp] = useState({ componentType: 'chain', brand: '', model: '', notes: '' })
+  const [bikeActivities, setBikeActivities] = useState<BikeActivity[]>([])
+  const [newComp, setNewComp] = useState({ componentType: 'chain', brand: '', model: '', notes: '', installActivityId: '' })
   const [moveTarget, setMoveTarget] = useState<{ componentId: number; show: boolean }>({ componentId: 0, show: false })
   const [retireTarget, setRetireTarget] = useState<{ componentId: number; show: boolean; reason: string }>({ componentId: 0, show: false, reason: '' })
 
@@ -101,6 +111,15 @@ export default function BikeDetailPage() {
     }
   }
 
+  async function fetchBikeActivities() {
+    try {
+      const res = await fetch(`/api/bikes/${bikeId}/activities`)
+      if (res.ok) setBikeActivities(await res.json())
+    } catch (e) {
+      console.error('Error fetching bike activities:', e)
+    }
+  }
+
   async function addComponent() {
     if (!newComp.componentType) return
     const option = COMPONENT_OPTIONS.find(o => o.id === newComp.componentType)
@@ -114,11 +133,12 @@ export default function BikeDetailPage() {
           model: newComp.model || undefined,
           notes: newComp.notes || undefined,
           expectedLifetimeDistance: option ? option.defaultMiles * MI_TO_M : undefined,
+          installActivityId: newComp.installActivityId ? Number(newComp.installActivityId) : undefined,
         })
       })
       if (res.ok) {
         setShowAddComponent(false)
-        setNewComp({ componentType: 'chain', brand: '', model: '', notes: '' })
+        setNewComp({ componentType: 'chain', brand: '', model: '', notes: '', installActivityId: '' })
         await fetchComponents()
       }
     } catch (e) {
@@ -264,7 +284,11 @@ export default function BikeDetailPage() {
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold">Components</h2>
             <button
-              onClick={() => setShowAddComponent(!showAddComponent)}
+              onClick={() => {
+                const next = !showAddComponent
+                setShowAddComponent(next)
+                if (next && bikeActivities.length === 0) fetchBikeActivities()
+              }}
               className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg flex items-center gap-2 text-sm transition-colors"
             >
               <Plus size={14} />
@@ -319,6 +343,24 @@ export default function BikeDetailPage() {
                   />
                 </div>
               </div>
+              <div className="mb-4">
+                <label className="block text-sm text-gray-400 mb-1">Track From</label>
+                <select
+                  value={newComp.installActivityId}
+                  onChange={e => setNewComp({...newComp, installActivityId: e.target.value})}
+                  className="w-full md:w-1/2 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 focus:border-purple-500 focus:outline-none"
+                >
+                  <option value="">All Time (default)</option>
+                  {bikeActivities.map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} — {new Date(a.start_date).toLocaleDateString()} ({(Number(a.distance) * 0.000621371).toFixed(1)} mi)
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Choose a ride to start tracking mileage from that point, or leave as All Time.
+                </p>
+              </div>
               <div className="flex gap-3">
                 <button
                   onClick={addComponent}
@@ -361,6 +403,13 @@ export default function BikeDetailPage() {
                         <p className="text-xs text-gray-500 mt-1">
                           Installed: {new Date(comp.install_date).toLocaleDateString()}
                         </p>
+                        {comp.install_activity_name ? (
+                          <p className="text-xs text-purple-400 mt-0.5">
+                            Tracking from: {comp.install_activity_name}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-gray-600 mt-0.5">Tracking: all time</p>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         {/* Move */}

@@ -435,13 +435,62 @@ export async function getBikeByStravaGearId(userId: number, stravaGearId: string
 
 // ============ Components ============
 
-export async function getBikeComponents(bikeId: number) {
+export async function getBikeActivities(bikeId: number) {
   const result = await sql`
-    SELECT * FROM components
-    WHERE bike_id = ${bikeId} AND status = 'active'
-    ORDER BY component_type ASC
+    SELECT id, name, start_date, distance FROM activities
+    WHERE bike_id = ${bikeId}
+    ORDER BY start_date DESC
   `;
   return result.rows;
+}
+
+export async function calculateInstallDistanceFromActivity(bikeId: number, activityId: number) {
+  // Get the activity's start_date
+  const activityResult = await sql`
+    SELECT start_date FROM activities WHERE id = ${activityId}
+  `;
+  if (!activityResult.rows[0]) throw new Error('Activity not found');
+  const activityDate = activityResult.rows[0].start_date;
+
+  // Sum all distances for this bike from that activity's date onward
+  const sumResult = await sql`
+    SELECT COALESCE(SUM(distance), 0) as total_since
+    FROM activities
+    WHERE bike_id = ${bikeId} AND start_date >= ${activityDate}
+  `;
+
+  // Get bike's current total distance
+  const bikeResult = await sql`
+    SELECT total_distance FROM bikes WHERE id = ${bikeId}
+  `;
+  if (!bikeResult.rows[0]) throw new Error('Bike not found');
+
+  const bikeTotal = Number(bikeResult.rows[0].total_distance);
+  const totalSince = Number(sumResult.rows[0].total_since);
+
+  // install_distance = bike total - distance accumulated since that ride
+  return bikeTotal - totalSince;
+}
+
+export async function getBikeComponents(bikeId: number) {
+  try {
+    const result = await sql`
+      SELECT c.*, a.name as install_activity_name
+      FROM components c
+      LEFT JOIN activities a ON c.install_activity_id = a.id
+      WHERE c.bike_id = ${bikeId} AND c.status = 'active'
+      ORDER BY c.component_type ASC
+    `;
+    return result.rows;
+  } catch {
+    // Fallback if install_activity_id column doesn't exist yet
+    const result = await sql`
+      SELECT * FROM components
+      WHERE bike_id = ${bikeId} AND status = 'active'
+      ORDER BY component_type ASC
+    `;
+    return result.rows;
+  }
 }
 
 export async function createComponent(data: {
@@ -452,27 +501,55 @@ export async function createComponent(data: {
   model?: string;
   installDate?: string;
   installDistance?: number;
+  installActivityId?: number;
   expectedLifetimeDistance?: number;
   expectedLifetimeDays?: number;
   notes?: string;
 }) {
-  const result = await sql`
-    INSERT INTO components (
-      user_id, bike_id, component_type, brand, model,
-      install_date, install_distance, expected_lifetime_distance,
-      expected_lifetime_days, notes
-    )
-    VALUES (
-      ${data.userId}, ${data.bikeId}, ${data.componentType},
-      ${data.brand || null}, ${data.model || null},
-      ${data.installDate || new Date().toISOString().split('T')[0]},
-      ${data.installDistance || 0},
-      ${data.expectedLifetimeDistance || null},
-      ${data.expectedLifetimeDays || null},
-      ${data.notes || null}
-    )
-    RETURNING *
-  `;
+  let result;
+  try {
+    result = await sql`
+      INSERT INTO components (
+        user_id, bike_id, component_type, brand, model,
+        install_date, install_distance, install_activity_id,
+        expected_lifetime_distance, expected_lifetime_days, notes
+      )
+      VALUES (
+        ${data.userId}, ${data.bikeId}, ${data.componentType},
+        ${data.brand || null}, ${data.model || null},
+        ${data.installDate || new Date().toISOString().split('T')[0]},
+        ${data.installDistance || 0},
+        ${data.installActivityId || null},
+        ${data.expectedLifetimeDistance || null},
+        ${data.expectedLifetimeDays || null},
+        ${data.notes || null}
+      )
+      RETURNING *
+    `;
+  } catch (e: any) {
+    // Fallback if install_activity_id column doesn't exist yet
+    if (e.message?.includes('install_activity_id')) {
+      result = await sql`
+        INSERT INTO components (
+          user_id, bike_id, component_type, brand, model,
+          install_date, install_distance, expected_lifetime_distance,
+          expected_lifetime_days, notes
+        )
+        VALUES (
+          ${data.userId}, ${data.bikeId}, ${data.componentType},
+          ${data.brand || null}, ${data.model || null},
+          ${data.installDate || new Date().toISOString().split('T')[0]},
+          ${data.installDistance || 0},
+          ${data.expectedLifetimeDistance || null},
+          ${data.expectedLifetimeDays || null},
+          ${data.notes || null}
+        )
+        RETURNING *
+      `;
+    } else {
+      throw e;
+    }
+  }
 
   // Record install event
   await sql`

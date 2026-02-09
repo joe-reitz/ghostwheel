@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/session';
-import { updateComponent, moveComponent, retireComponent, getComponentHistory } from '@/lib/db';
+import { updateComponent, moveComponent, retireComponent, getComponentHistory, calculateInstallDistanceFromActivity, updateComponentInstallTracking } from '@/lib/db';
 
 export async function PUT(
   request: Request,
@@ -8,8 +8,17 @@ export async function PUT(
 ) {
   try {
     await requireAuth();
-    const { componentId } = await params;
+    const { id, componentId } = await params;
     const body = await request.json();
+
+    // Handle install tracking change (ride picker)
+    if ('installActivityId' in body) {
+      let installDistance = 0;
+      if (body.installActivityId) {
+        installDistance = await calculateInstallDistanceFromActivity(Number(id), body.installActivityId);
+      }
+      await updateComponentInstallTracking(Number(componentId), installDistance, body.installActivityId || null);
+    }
 
     const component = await updateComponent(Number(componentId), {
       currentDistance: body.currentDistance,

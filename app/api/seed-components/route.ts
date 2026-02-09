@@ -23,7 +23,7 @@ function makeDrivetrainComponents(groupset: string): SeedComponent[] {
 }
 
 const SHARED_COMPONENTS: SeedComponent[] = [
-  { componentType: 'brake_pads', expectedLifetimeDistance: 1000 * MI },
+  { componentType: 'brake_pads', expectedLifetimeDistance: 3000 * MI },
   { componentType: 'bar_tape', expectedLifetimeDistance: 5000 * MI },
   { componentType: 'wheels', expectedLifetimeDistance: 20000 * MI },
 ];

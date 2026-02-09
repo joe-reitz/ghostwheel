@@ -49,7 +49,7 @@ export const COMPONENT_TYPES: ComponentTypeInfo[] = [
   {
     id: 'brake_pads',
     name: 'Brake Pads',
-    defaultLifetimeDistance: 1000 * MI,
+    defaultLifetimeDistance: 3000 * MI,
     description: 'Brake pads (rim or disc) — varies greatly with terrain and weather'
   },
   {

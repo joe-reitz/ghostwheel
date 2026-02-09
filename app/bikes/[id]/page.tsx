@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { Nav } from "@/components/nav"
-import { ArrowLeft, Plus, Trash2, ArrowRightLeft, Settings, Activity, Mountain } from "lucide-react"
+import { ArrowLeft, Plus, Trash2, ArrowRightLeft, Settings, Activity, Mountain, Pencil } from "lucide-react"
 
 interface BikeData {
   id: number
@@ -31,6 +31,7 @@ interface ComponentData {
   expected_lifetime_days?: number
   status: string
   notes?: string
+  install_activity_id?: number
   install_activity_name?: string
 }
 
@@ -48,7 +49,7 @@ const COMPONENT_OPTIONS = [
   { id: 'rear_derailleur', name: 'Rear Derailleur', defaultMiles: 15000 },
   { id: 'tires_front', name: 'Front Tire', defaultMiles: 3500 },
   { id: 'tires_rear', name: 'Rear Tire', defaultMiles: 3000 },
-  { id: 'brake_pads', name: 'Brake Pads', defaultMiles: 1000 },
+  { id: 'brake_pads', name: 'Brake Pads', defaultMiles: 3000 },
   { id: 'bar_tape', name: 'Bar Tape', defaultMiles: 5000 },
   { id: 'chain_wax', name: 'Chain Wax', defaultMiles: 200 },
   { id: 'chain_lube', name: 'Chain Lube', defaultMiles: 100 },
@@ -75,6 +76,7 @@ export default function BikeDetailPage() {
   const [newComp, setNewComp] = useState({ componentType: 'chain', brand: '', model: '', notes: '', installActivityId: '' })
   const [moveTarget, setMoveTarget] = useState<{ componentId: number; show: boolean }>({ componentId: 0, show: false })
   const [retireTarget, setRetireTarget] = useState<{ componentId: number; show: boolean; reason: string }>({ componentId: 0, show: false, reason: '' })
+  const [editTarget, setEditTarget] = useState<{ componentId: number; show: boolean; lifetimeMiles: string; installActivityId: string }>({ componentId: 0, show: false, lifetimeMiles: '', installActivityId: '' })
 
   useEffect(() => {
     fetchBike()
@@ -180,6 +182,39 @@ export default function BikeDetailPage() {
     } catch (e) {
       console.error('Error retiring component:', e)
     }
+  }
+
+  async function handleEdit(componentId: number) {
+    try {
+      const body: any = {}
+      if (editTarget.lifetimeMiles) {
+        body.expectedLifetimeDistance = Number(editTarget.lifetimeMiles) * MI_TO_M
+      }
+      // Always send installActivityId so the API knows to update tracking
+      body.installActivityId = editTarget.installActivityId ? Number(editTarget.installActivityId) : null
+      await fetch(`/api/bikes/${bikeId}/components/${componentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      setEditTarget({ componentId: 0, show: false, lifetimeMiles: '', installActivityId: '' })
+      await fetchComponents()
+    } catch (e) {
+      console.error('Error editing component:', e)
+    }
+  }
+
+  function openEdit(comp: ComponentData) {
+    const lifetimeMiles = comp.expected_lifetime_distance
+      ? (Number(comp.expected_lifetime_distance) * 0.000621371).toFixed(0)
+      : ''
+    setEditTarget({
+      componentId: comp.id,
+      show: true,
+      lifetimeMiles,
+      installActivityId: comp.install_activity_id ? String(comp.install_activity_id) : ''
+    })
+    if (bikeActivities.length === 0) fetchBikeActivities()
   }
 
   function getComponentPercentRemaining(comp: ComponentData) {
@@ -412,6 +447,14 @@ export default function BikeDetailPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-2">
+                        {/* Edit */}
+                        <button
+                          onClick={() => openEdit(comp)}
+                          className="text-gray-500 hover:text-purple-400 p-1 transition-colors"
+                          title="Edit component"
+                        >
+                          <Pencil size={16} />
+                        </button>
                         {/* Move */}
                         <button
                           onClick={() => setMoveTarget({
@@ -510,6 +553,53 @@ export default function BikeDetailPage() {
                             className="bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded text-sm transition-colors"
                           >
                             Retire
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Edit form */}
+                    {editTarget.componentId === comp.id && editTarget.show && (
+                      <div className="mt-3 p-3 bg-gray-700/50 rounded-lg border border-purple-500/30">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                          <div>
+                            <label className="block text-xs text-gray-400 mb-1">Lifetime (miles)</label>
+                            <input
+                              type="number"
+                              value={editTarget.lifetimeMiles}
+                              onChange={e => setEditTarget({...editTarget, lifetimeMiles: e.target.value})}
+                              placeholder="e.g. 3000"
+                              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:border-purple-500 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-400 mb-1">Track From</label>
+                            <select
+                              value={editTarget.installActivityId}
+                              onChange={e => setEditTarget({...editTarget, installActivityId: e.target.value})}
+                              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:border-purple-500 focus:outline-none"
+                            >
+                              <option value="">All Time</option>
+                              {bikeActivities.map(a => (
+                                <option key={a.id} value={a.id}>
+                                  {a.name} — {new Date(a.start_date).toLocaleDateString()}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleEdit(comp.id)}
+                            className="bg-purple-600 hover:bg-purple-700 px-3 py-1.5 rounded text-sm transition-colors"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditTarget({ componentId: 0, show: false, lifetimeMiles: '', installActivityId: '' })}
+                            className="text-gray-400 hover:text-white px-3 py-1.5 rounded text-sm transition-colors"
+                          >
+                            Cancel
                           </button>
                         </div>
                       </div>

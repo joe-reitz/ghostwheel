@@ -583,6 +583,26 @@ export async function updateComponent(componentId: number, data: {
   return result.rows[0];
 }
 
+export async function updateComponentInstallTracking(componentId: number, installDistance: number, installActivityId: number | null) {
+  try {
+    await sql`
+      UPDATE components SET
+        install_distance = ${installDistance},
+        install_activity_id = ${installActivityId},
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${componentId}
+    `;
+  } catch {
+    // Fallback if install_activity_id column doesn't exist
+    await sql`
+      UPDATE components SET
+        install_distance = ${installDistance},
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${componentId}
+    `;
+  }
+}
+
 export async function moveComponent(componentId: number, toBikeId: number, distanceAtEvent: number) {
   const component = await sql`SELECT * FROM components WHERE id = ${componentId}`;
   if (!component.rows[0]) return null;

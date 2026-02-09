@@ -24,6 +24,7 @@ export default function BikesPage() {
   const [bikes, setBikes] = useState<BikeData[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [newBike, setNewBike] = useState({ name: '', brand: '', model: '', bikeType: 'road', weight: '' })
 
@@ -33,12 +34,31 @@ export default function BikesPage() {
 
   async function fetchBikes() {
     try {
+      setError(null)
       const res = await fetch('/api/bikes')
       if (res.ok) {
         const data = await res.json()
         setBikes(data)
+      } else {
+        const data = await res.json().catch(() => ({}))
+        const msg = data.error || `Failed to load bikes (${res.status})`
+        // If the table doesn't exist, try running the migration
+        if (msg.includes('does not exist') || msg.includes('relation')) {
+          console.log('Bikes table missing, running migration...')
+          const setupRes = await fetch('/api/setup-bikes-db')
+          if (setupRes.ok) {
+            // Retry after migration
+            const retryRes = await fetch('/api/bikes')
+            if (retryRes.ok) {
+              setBikes(await retryRes.json())
+              return
+            }
+          }
+        }
+        setError(msg)
       }
     } catch (e) {
+      setError('Failed to connect to server')
       console.error('Error fetching bikes:', e)
     } finally {
       setLoading(false)
@@ -47,12 +67,17 @@ export default function BikesPage() {
 
   async function syncFromStrava() {
     setSyncing(true)
+    setError(null)
     try {
       const res = await fetch('/api/bikes/sync', { method: 'POST' })
       if (res.ok) {
         await fetchBikes()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error || `Sync failed (${res.status})`)
       }
     } catch (e) {
+      setError('Failed to sync from Strava')
       console.error('Error syncing bikes:', e)
     } finally {
       setSyncing(false)
@@ -61,6 +86,7 @@ export default function BikesPage() {
 
   async function addBike() {
     if (!newBike.name.trim()) return
+    setError(null)
     try {
       const res = await fetch('/api/bikes', {
         method: 'POST',
@@ -77,8 +103,12 @@ export default function BikesPage() {
         setNewBike({ name: '', brand: '', model: '', bikeType: 'road', weight: '' })
         setShowAddForm(false)
         await fetchBikes()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error || `Failed to add bike (${res.status})`)
       }
     } catch (e) {
+      setError('Failed to add bike')
       console.error('Error adding bike:', e)
     }
   }
@@ -131,6 +161,14 @@ export default function BikesPage() {
             </button>
           </div>
         </div>
+
+        {/* Error Banner */}
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-6 flex items-center justify-between">
+            <p className="text-red-400 text-sm">{error}</p>
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300 text-sm ml-4">Dismiss</button>
+          </div>
+        )}
 
         {/* Add Bike Form */}
         {showAddForm && (

@@ -8,7 +8,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell
 } from 'recharts'
-import { Calendar, TrendingUp, Zap, Heart, Target, Activity, RefreshCw, Bot } from 'lucide-react'
+import { Calendar, TrendingUp, Zap, Heart, Target, Activity, RefreshCw, Bot, Wrench, AlertTriangle } from 'lucide-react'
 
 interface ActivityData {
   id: number
@@ -57,6 +57,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [maintenanceAlerts, setMaintenanceAlerts] = useState<{overdue: number; dueSoon: number} | null>(null)
 
   async function fetchData() {
     setLoading(true)
@@ -87,6 +88,21 @@ export default function Dashboard() {
   useEffect(() => {
     fetchData()
   }, [lookback])
+
+  useEffect(() => {
+    async function fetchMaintenance() {
+      try {
+        const res = await fetch('/api/maintenance/check')
+        if (res.ok) {
+          const data = await res.json()
+          setMaintenanceAlerts({ overdue: data.summary.overdue, dueSoon: data.summary.dueSoon })
+        }
+      } catch (e) {
+        // maintenance tables may not exist yet
+      }
+    }
+    fetchMaintenance()
+  }, [])
 
   // Auto-sync on first load to get latest rides
   useEffect(() => {
@@ -395,6 +411,45 @@ export default function Dashboard() {
             </LineChart>
           </ResponsiveContainer>
         </div>
+
+        {/* Maintenance Alerts */}
+        {maintenanceAlerts && (maintenanceAlerts.overdue > 0 || maintenanceAlerts.dueSoon > 0) && (
+          <div className={`border rounded-xl p-6 mb-8 ${
+            maintenanceAlerts.overdue > 0
+              ? 'bg-red-500/10 border-red-500/30'
+              : 'bg-yellow-500/10 border-yellow-500/30'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {maintenanceAlerts.overdue > 0 ? (
+                  <AlertTriangle className="text-red-400" size={24} />
+                ) : (
+                  <Wrench className="text-yellow-400" size={24} />
+                )}
+                <div>
+                  <h3 className="font-bold text-lg">
+                    {maintenanceAlerts.overdue > 0
+                      ? `${maintenanceAlerts.overdue} overdue maintenance item${maintenanceAlerts.overdue > 1 ? 's' : ''}`
+                      : `${maintenanceAlerts.dueSoon} maintenance item${maintenanceAlerts.dueSoon > 1 ? 's' : ''} due soon`
+                    }
+                  </h3>
+                  <p className="text-sm text-gray-400">
+                    {maintenanceAlerts.overdue > 0 && maintenanceAlerts.dueSoon > 0
+                      ? `Plus ${maintenanceAlerts.dueSoon} more coming up soon`
+                      : 'Check your bikes for service needs'
+                    }
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => router.push('/maintenance')}
+                className="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm transition-colors"
+              >
+                View All
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Recent Rides */}
         <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 backdrop-blur">

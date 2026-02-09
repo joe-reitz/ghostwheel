@@ -223,6 +223,94 @@ CREATE TABLE IF NOT EXISTS segment_efforts (
   INDEX idx_user_segment (user_id, segment_id)
 );
 
+-- Bikes (synced from Strava or manually added)
+CREATE TABLE IF NOT EXISTS bikes (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  strava_gear_id VARCHAR(50),
+  name VARCHAR(255) NOT NULL,
+  brand VARCHAR(255),
+  model VARCHAR(255),
+  bike_type VARCHAR(50) DEFAULT 'road', -- road, gravel, mountain, tt, track, cx, hybrid
+  weight DECIMAL(5,2), -- in kg
+  is_active BOOLEAN DEFAULT TRUE,
+  total_distance DECIMAL(12,2) DEFAULT 0, -- cached, in meters
+  ride_count INTEGER DEFAULT 0,
+  total_elevation DECIMAL(10,2) DEFAULT 0, -- cached, in meters
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+  UNIQUE(user_id, strava_gear_id)
+);
+
+-- Components (trackable parts on a bike)
+CREATE TABLE IF NOT EXISTS components (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  bike_id INTEGER REFERENCES bikes(id) ON DELETE SET NULL,
+  component_type VARCHAR(50) NOT NULL, -- chain, cassette, chainrings, tires_front, tires_rear, brake_pads, bar_tape, chain_wax, chain_lube, cables
+  brand VARCHAR(255),
+  model VARCHAR(255),
+  install_date DATE DEFAULT CURRENT_DATE,
+  install_distance DECIMAL(12,2) DEFAULT 0, -- bike distance at install time (meters)
+  current_distance DECIMAL(12,2) DEFAULT 0, -- distance on this component (meters)
+  expected_lifetime_distance DECIMAL(12,2), -- in meters
+  expected_lifetime_days INTEGER,
+  status VARCHAR(20) DEFAULT 'active', -- active, retired, moved
+  retirement_reason VARCHAR(255),
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Component history (install/move/retire/service events)
+CREATE TABLE IF NOT EXISTS component_history (
+  id SERIAL PRIMARY KEY,
+  component_id INTEGER REFERENCES components(id) ON DELETE CASCADE,
+  event_type VARCHAR(20) NOT NULL, -- installed, moved, retired, serviced
+  from_bike_id INTEGER REFERENCES bikes(id) ON DELETE SET NULL,
+  to_bike_id INTEGER REFERENCES bikes(id) ON DELETE SET NULL,
+  distance_at_event DECIMAL(12,2),
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Maintenance schedules (reminders for periodic service)
+CREATE TABLE IF NOT EXISTS maintenance_schedules (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  bike_id INTEGER REFERENCES bikes(id) ON DELETE CASCADE,
+  component_type VARCHAR(50) NOT NULL,
+  interval_distance DECIMAL(12,2), -- meters between services
+  interval_days INTEGER, -- days between services
+  last_service_date DATE,
+  last_service_distance DECIMAL(12,2) DEFAULT 0, -- bike distance at last service
+  email_alert BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tire pressure configurations (saved calculator setups)
+CREATE TABLE IF NOT EXISTS tire_pressure_configs (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  bike_id INTEGER REFERENCES bikes(id) ON DELETE SET NULL,
+  name VARCHAR(255) NOT NULL,
+  tire_width_front DECIMAL(5,1) NOT NULL, -- mm
+  tire_width_rear DECIMAL(5,1) NOT NULL,
+  tire_type VARCHAR(20) NOT NULL, -- tubeless, clincher, tubular
+  surface_type VARCHAR(50) NOT NULL,
+  rider_weight DECIMAL(5,2) NOT NULL, -- kg
+  bike_weight DECIMAL(5,2) NOT NULL, -- kg
+  front_rear_split DECIMAL(4,2) DEFAULT 0.42, -- fraction on front
+  calculated_front_psi DECIMAL(5,1),
+  calculated_rear_psi DECIMAL(5,1),
+  is_default BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -240,6 +328,14 @@ CREATE TRIGGER update_training_load_updated_at BEFORE UPDATE ON training_load FO
 CREATE TRIGGER update_goals_updated_at BEFORE UPDATE ON goals FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_training_plans_updated_at BEFORE UPDATE ON training_plans FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_planned_workouts_updated_at BEFORE UPDATE ON planned_workouts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_bikes_updated_at BEFORE UPDATE ON bikes FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_components_updated_at BEFORE UPDATE ON components FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_maintenance_schedules_updated_at BEFORE UPDATE ON maintenance_schedules FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_tire_pressure_configs_updated_at BEFORE UPDATE ON tire_pressure_configs FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Add bike association to activities
+ALTER TABLE activities ADD COLUMN IF NOT EXISTS bike_id INTEGER REFERENCES bikes(id) ON DELETE SET NULL;
+ALTER TABLE activities ADD COLUMN IF NOT EXISTS strava_gear_id VARCHAR(50);
 
 
 

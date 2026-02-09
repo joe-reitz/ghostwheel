@@ -81,56 +81,110 @@ export async function getActivitiesByDateRange(userId: number, startDate: Date, 
 }
 
 export async function createOrUpdateActivity(activityData: any) {
-  const result = await sql`
-    INSERT INTO activities (
-      user_id, strava_id, name, type, start_date, distance, moving_time,
-      elapsed_time, total_elevation_gain, average_speed, max_speed,
-      average_watts, max_watts, weighted_power, average_heartrate,
-      max_heartrate, average_cadence, max_cadence, kilojoules,
-      device_watts, has_heartrate, tss, intensity_factor,
-      variability_index, summary_polyline, map_id,
-      strava_gear_id, bike_id
-    )
-    VALUES (
-      ${activityData.userId}, ${activityData.stravaId}, ${activityData.name},
-      ${activityData.type}, ${activityData.startDate}, ${activityData.distance},
-      ${activityData.movingTime}, ${activityData.elapsedTime},
-      ${activityData.totalElevationGain}, ${activityData.averageSpeed},
-      ${activityData.maxSpeed}, ${activityData.averageWatts},
-      ${activityData.maxWatts}, ${activityData.weightedPower},
-      ${activityData.averageHeartrate}, ${activityData.maxHeartrate},
-      ${activityData.averageCadence}, ${activityData.maxCadence},
-      ${activityData.kilojoules}, ${activityData.deviceWatts},
-      ${activityData.hasHeartrate}, ${activityData.tss},
-      ${activityData.intensityFactor}, ${activityData.variabilityIndex},
-      ${activityData.summaryPolyline}, ${activityData.mapId},
-      ${activityData.stravaGearId || null}, ${activityData.bikeId || null}
-    )
-    ON CONFLICT (strava_id)
-    DO UPDATE SET
-      name = EXCLUDED.name,
-      distance = EXCLUDED.distance,
-      moving_time = EXCLUDED.moving_time,
-      elapsed_time = EXCLUDED.elapsed_time,
-      total_elevation_gain = EXCLUDED.total_elevation_gain,
-      average_speed = EXCLUDED.average_speed,
-      max_speed = EXCLUDED.max_speed,
-      average_watts = EXCLUDED.average_watts,
-      max_watts = EXCLUDED.max_watts,
-      weighted_power = EXCLUDED.weighted_power,
-      average_heartrate = EXCLUDED.average_heartrate,
-      max_heartrate = EXCLUDED.max_heartrate,
-      average_cadence = EXCLUDED.average_cadence,
-      max_cadence = EXCLUDED.max_cadence,
-      tss = EXCLUDED.tss,
-      intensity_factor = EXCLUDED.intensity_factor,
-      variability_index = EXCLUDED.variability_index,
-      strava_gear_id = COALESCE(EXCLUDED.strava_gear_id, activities.strava_gear_id),
-      bike_id = COALESCE(EXCLUDED.bike_id, activities.bike_id),
-      updated_at = CURRENT_TIMESTAMP
-    RETURNING *
-  `;
-  return result.rows[0];
+  try {
+    // Try with bike columns (requires setup-bikes-db migration)
+    const result = await sql`
+      INSERT INTO activities (
+        user_id, strava_id, name, type, start_date, distance, moving_time,
+        elapsed_time, total_elevation_gain, average_speed, max_speed,
+        average_watts, max_watts, weighted_power, average_heartrate,
+        max_heartrate, average_cadence, max_cadence, kilojoules,
+        device_watts, has_heartrate, tss, intensity_factor,
+        variability_index, summary_polyline, map_id,
+        strava_gear_id, bike_id
+      )
+      VALUES (
+        ${activityData.userId}, ${activityData.stravaId}, ${activityData.name},
+        ${activityData.type}, ${activityData.startDate}, ${activityData.distance},
+        ${activityData.movingTime}, ${activityData.elapsedTime},
+        ${activityData.totalElevationGain}, ${activityData.averageSpeed},
+        ${activityData.maxSpeed}, ${activityData.averageWatts},
+        ${activityData.maxWatts}, ${activityData.weightedPower},
+        ${activityData.averageHeartrate}, ${activityData.maxHeartrate},
+        ${activityData.averageCadence}, ${activityData.maxCadence},
+        ${activityData.kilojoules}, ${activityData.deviceWatts},
+        ${activityData.hasHeartrate}, ${activityData.tss},
+        ${activityData.intensityFactor}, ${activityData.variabilityIndex},
+        ${activityData.summaryPolyline}, ${activityData.mapId},
+        ${activityData.stravaGearId || null}, ${activityData.bikeId || null}
+      )
+      ON CONFLICT (strava_id)
+      DO UPDATE SET
+        name = EXCLUDED.name,
+        distance = EXCLUDED.distance,
+        moving_time = EXCLUDED.moving_time,
+        elapsed_time = EXCLUDED.elapsed_time,
+        total_elevation_gain = EXCLUDED.total_elevation_gain,
+        average_speed = EXCLUDED.average_speed,
+        max_speed = EXCLUDED.max_speed,
+        average_watts = EXCLUDED.average_watts,
+        max_watts = EXCLUDED.max_watts,
+        weighted_power = EXCLUDED.weighted_power,
+        average_heartrate = EXCLUDED.average_heartrate,
+        max_heartrate = EXCLUDED.max_heartrate,
+        average_cadence = EXCLUDED.average_cadence,
+        max_cadence = EXCLUDED.max_cadence,
+        tss = EXCLUDED.tss,
+        intensity_factor = EXCLUDED.intensity_factor,
+        variability_index = EXCLUDED.variability_index,
+        strava_gear_id = COALESCE(EXCLUDED.strava_gear_id, activities.strava_gear_id),
+        bike_id = COALESCE(EXCLUDED.bike_id, activities.bike_id),
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING *
+    `;
+    return result.rows[0];
+  } catch (e: any) {
+    // Fall back to original query if bike columns don't exist yet
+    if (e.message?.includes('column') && (e.message?.includes('strava_gear_id') || e.message?.includes('bike_id'))) {
+      const result = await sql`
+        INSERT INTO activities (
+          user_id, strava_id, name, type, start_date, distance, moving_time,
+          elapsed_time, total_elevation_gain, average_speed, max_speed,
+          average_watts, max_watts, weighted_power, average_heartrate,
+          max_heartrate, average_cadence, max_cadence, kilojoules,
+          device_watts, has_heartrate, tss, intensity_factor,
+          variability_index, summary_polyline, map_id
+        )
+        VALUES (
+          ${activityData.userId}, ${activityData.stravaId}, ${activityData.name},
+          ${activityData.type}, ${activityData.startDate}, ${activityData.distance},
+          ${activityData.movingTime}, ${activityData.elapsedTime},
+          ${activityData.totalElevationGain}, ${activityData.averageSpeed},
+          ${activityData.maxSpeed}, ${activityData.averageWatts},
+          ${activityData.maxWatts}, ${activityData.weightedPower},
+          ${activityData.averageHeartrate}, ${activityData.maxHeartrate},
+          ${activityData.averageCadence}, ${activityData.maxCadence},
+          ${activityData.kilojoules}, ${activityData.deviceWatts},
+          ${activityData.hasHeartrate}, ${activityData.tss},
+          ${activityData.intensityFactor}, ${activityData.variabilityIndex},
+          ${activityData.summaryPolyline}, ${activityData.mapId}
+        )
+        ON CONFLICT (strava_id)
+        DO UPDATE SET
+          name = EXCLUDED.name,
+          distance = EXCLUDED.distance,
+          moving_time = EXCLUDED.moving_time,
+          elapsed_time = EXCLUDED.elapsed_time,
+          total_elevation_gain = EXCLUDED.total_elevation_gain,
+          average_speed = EXCLUDED.average_speed,
+          max_speed = EXCLUDED.max_speed,
+          average_watts = EXCLUDED.average_watts,
+          max_watts = EXCLUDED.max_watts,
+          weighted_power = EXCLUDED.weighted_power,
+          average_heartrate = EXCLUDED.average_heartrate,
+          max_heartrate = EXCLUDED.max_heartrate,
+          average_cadence = EXCLUDED.average_cadence,
+          max_cadence = EXCLUDED.max_cadence,
+          tss = EXCLUDED.tss,
+          intensity_factor = EXCLUDED.intensity_factor,
+          variability_index = EXCLUDED.variability_index,
+          updated_at = CURRENT_TIMESTAMP
+        RETURNING *
+      `;
+      return result.rows[0];
+    }
+    throw e;
+  }
 }
 
 export async function getTrainingLoad(userId: number, days: number = 90) {

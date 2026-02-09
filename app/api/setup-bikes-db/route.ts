@@ -115,11 +115,17 @@ export async function GET() {
       $$ language 'plpgsql'
     `;
 
-    const triggerTables = ['bikes', 'components', 'maintenance_schedules', 'tire_pressure_configs'];
-    for (const table of triggerTables) {
-      await sql.query(`DROP TRIGGER IF EXISTS update_${table}_updated_at ON ${table}`);
-      await sql.query(`CREATE TRIGGER update_${table}_updated_at BEFORE UPDATE ON ${table} FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
-    }
+    await sql`DROP TRIGGER IF EXISTS update_bikes_updated_at ON bikes`;
+    await sql`CREATE TRIGGER update_bikes_updated_at BEFORE UPDATE ON bikes FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`;
+
+    await sql`DROP TRIGGER IF EXISTS update_components_updated_at ON components`;
+    await sql`CREATE TRIGGER update_components_updated_at BEFORE UPDATE ON components FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`;
+
+    await sql`DROP TRIGGER IF EXISTS update_maintenance_schedules_updated_at ON maintenance_schedules`;
+    await sql`CREATE TRIGGER update_maintenance_schedules_updated_at BEFORE UPDATE ON maintenance_schedules FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`;
+
+    await sql`DROP TRIGGER IF EXISTS update_tire_pressure_configs_updated_at ON tire_pressure_configs`;
+    await sql`CREATE TRIGGER update_tire_pressure_configs_updated_at BEFORE UPDATE ON tire_pressure_configs FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`;
 
     const result = await sql`
       SELECT table_name

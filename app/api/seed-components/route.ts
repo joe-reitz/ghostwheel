@@ -49,15 +49,26 @@ export async function GET() {
 
     const results: string[] = [];
 
+    // Update bike types (Strava doesn't have 'gravel')
+    if (seigla && seigla.bike_type !== 'gravel') {
+      await sql`UPDATE bikes SET bike_type = 'gravel' WHERE id = ${seigla.id}`;
+      results.push('Seigla: updated bike type to gravel');
+    }
+
     // Find Kitsap Color Classic activity for Seigla
     let kitsapActivity: any = null;
     if (seigla) {
-      const kitsapResult = await sql`
-        SELECT id, name, start_date FROM activities
-        WHERE bike_id = ${seigla.id} AND name ILIKE '%Kitsap Color Classic%'
-        ORDER BY start_date DESC LIMIT 1
-      `;
-      kitsapActivity = kitsapResult.rows[0];
+      try {
+        const kitsapResult = await sql`
+          SELECT id, name, start_date FROM activities
+          WHERE bike_id = ${seigla.id} AND name ILIKE '%Kitsap Color Classic%'
+          ORDER BY start_date DESC LIMIT 1
+        `;
+        kitsapActivity = kitsapResult.rows[0];
+      } catch {
+        // activities table may not exist yet or no activities synced
+        results.push('Note: Could not search activities (run setup-bikes-db then sync activities from Strava to enable ride linking)');
+      }
     }
 
     // Seed Seigla

@@ -3,6 +3,46 @@ import { sql } from '@vercel/postgres';
 
 export async function GET() {
   try {
+    console.log('Creating activities table...');
+    await sql`
+      CREATE TABLE IF NOT EXISTS activities (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        strava_id BIGINT UNIQUE NOT NULL,
+        name VARCHAR(255),
+        type VARCHAR(50),
+        start_date TIMESTAMP NOT NULL,
+        distance DECIMAL(10,2),
+        moving_time INTEGER,
+        elapsed_time INTEGER,
+        total_elevation_gain DECIMAL(10,2),
+        average_speed DECIMAL(10,2),
+        max_speed DECIMAL(10,2),
+        average_watts DECIMAL(10,2),
+        max_watts INTEGER,
+        weighted_power DECIMAL(10,2),
+        average_heartrate DECIMAL(6,2),
+        max_heartrate INTEGER,
+        average_cadence DECIMAL(6,2),
+        max_cadence INTEGER,
+        kilojoules DECIMAL(10,2),
+        device_watts BOOLEAN,
+        has_heartrate BOOLEAN,
+        tss DECIMAL(10,2),
+        intensity_factor DECIMAL(5,3),
+        variability_index DECIMAL(5,3),
+        summary_polyline TEXT,
+        map_id VARCHAR(255),
+        stream_data JSONB,
+        ai_analysis TEXT,
+        ai_feedback TEXT,
+        analyzed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS idx_activities_user_date ON activities (user_id, start_date DESC)`;
+
     console.log('Creating bikes table...');
     await sql`
       CREATE TABLE IF NOT EXISTS bikes (
@@ -134,7 +174,7 @@ export async function GET() {
       SELECT table_name
       FROM information_schema.tables
       WHERE table_schema = 'public'
-      AND table_name IN ('bikes', 'components', 'component_history', 'maintenance_schedules', 'tire_pressure_configs')
+      AND table_name IN ('activities', 'bikes', 'components', 'component_history', 'maintenance_schedules', 'tire_pressure_configs')
       ORDER BY table_name
     `;
 

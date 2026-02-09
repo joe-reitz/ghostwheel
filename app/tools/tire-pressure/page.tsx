@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Nav } from "@/components/nav"
-import { Gauge, Save, Trash2, ChevronDown, Info } from "lucide-react"
+import { Save, Trash2, Info } from "lucide-react"
 
 interface SurfaceCategory {
   id: string
@@ -41,7 +41,6 @@ const TIRE_WIDTH_PRESETS = [
 interface PressureResult {
   frontPsi: number
   rearPsi: number
-  method: string
   notes: string[]
 }
 
@@ -69,9 +68,7 @@ export default function TirePressurePage() {
   const [tireType, setTireType] = useState<'tubeless' | 'clincher' | 'tubular'>('clincher')
   const [surfaceId, setSurfaceId] = useState('average_pavement')
   const [frontRearSplit, setFrontRearSplit] = useState(42)
-  const [reneHerse, setReneHerse] = useState<PressureResult | null>(null)
-  const [silca, setSilca] = useState<PressureResult | null>(null)
-  const [recommended, setRecommended] = useState<{frontPsiLow: number; frontPsiHigh: number; rearPsiLow: number; rearPsiHigh: number} | null>(null)
+  const [result, setResult] = useState<PressureResult | null>(null)
   const [savedConfigs, setSavedConfigs] = useState<SavedConfig[]>([])
   const [configName, setConfigName] = useState('')
   const [showSave, setShowSave] = useState(false)
@@ -117,77 +114,44 @@ export default function TirePressurePage() {
     const frontLoad = totalWeight * split
     const rearLoad = totalWeight * (1 - split)
 
-    // --- Rene Herse ---
-    const rhCoeff = 105
-    let rhFront = rhCoeff * (frontLoad / tireWidthFront)
-    let rhRear = rhCoeff * (rearLoad / tireWidthRear)
-    const surfMult = 1 / surface.roughnessFactor
-    rhFront *= surfMult
-    rhRear *= surfMult
-    const rhNotes: string[] = []
-    if (tireType === 'tubeless') {
-      rhFront *= 0.90; rhRear *= 0.90
-      rhNotes.push('Tubeless: 10% lower than clincher (no pinch flat risk)')
-    } else if (tireType === 'tubular') {
-      rhFront *= 0.95; rhRear *= 0.95
-      rhNotes.push('Tubular: 5% lower (supple casing)')
-    }
-    rhNotes.push('Based on Bicycle Quarterly real-road testing data')
-
-    setReneHerse({
-      frontPsi: Math.round(rhFront * 2) / 2,
-      rearPsi: Math.round(rhRear * 2) / 2,
-      method: 'Rene Herse / Bicycle Quarterly',
-      notes: rhNotes
-    })
-
-    // --- Silca ---
+    // Silca breakpoint physics
     const frontContactLen = 0.7 * tireWidthFront
     const rearContactLen = 0.7 * tireWidthRear
-    let sFront = (frontLoad * 9.81) / (tireWidthFront * frontContactLen) * 145.038
-    let sRear = (rearLoad * 9.81) / (tireWidthRear * rearContactLen) * 145.038
+    let frontPsi = (frontLoad * 9.81) / (tireWidthFront * frontContactLen) * 145.038
+    let rearPsi = (rearLoad * 9.81) / (tireWidthRear * rearContactLen) * 145.038
+
+    // Volume correction
     const volRef = 300
     const frontVol = Math.PI * Math.pow(tireWidthFront / 2, 2) * Math.PI * (622 + tireWidthFront) / 1000
     const rearVol = Math.PI * Math.pow(tireWidthRear / 2, 2) * Math.PI * (622 + tireWidthRear) / 1000
-    sFront *= Math.pow(volRef / frontVol, 0.15)
-    sRear *= Math.pow(volRef / rearVol, 0.15)
+    frontPsi *= Math.pow(volRef / frontVol, 0.15)
+    rearPsi *= Math.pow(volRef / rearVol, 0.15)
+
+    // Surface derating
     const surfDerate = 1 - (surface.roughnessFactor - 1) * 0.6
-    sFront *= surfDerate
-    sRear *= surfDerate
-    const sNotes: string[] = []
+    frontPsi *= surfDerate
+    rearPsi *= surfDerate
+
+    const notes: string[] = []
     if (tireType === 'tubeless') {
-      sFront *= 0.93; sRear *= 0.93
-      sNotes.push('Tubeless: 7% reduction for better compliance')
+      frontPsi *= 0.93; rearPsi *= 0.93
+      notes.push('Tubeless: 7% reduction for better compliance')
     } else if (tireType === 'tubular') {
-      sFront *= 0.96; sRear *= 0.96
-      sNotes.push('Tubular: 4% reduction for round profile')
+      frontPsi *= 0.96; rearPsi *= 0.96
+      notes.push('Tubular: 4% reduction for round profile')
     }
-    sNotes.push('Based on Silca breakpoint physics model')
+    notes.push('Based on Silca breakpoint physics model')
 
-    const silcaResult = {
-      frontPsi: Math.round(sFront * 2) / 2,
-      rearPsi: Math.round(sRear * 2) / 2,
-      method: 'Silca (Breakpoint Physics)',
-      notes: sNotes
-    }
-    setSilca(silcaResult)
-
-    const rhFrontFinal = Math.round(rhFront * 2) / 2
-    const rhRearFinal = Math.round(rhRear * 2) / 2
-
-    setRecommended({
-      frontPsiLow: Math.round(Math.max(20, Math.min(rhFrontFinal, silcaResult.frontPsi) - 2) * 2) / 2,
-      frontPsiHigh: Math.round(Math.min(130, Math.max(rhFrontFinal, silcaResult.frontPsi) + 2) * 2) / 2,
-      rearPsiLow: Math.round(Math.max(20, Math.min(rhRearFinal, silcaResult.rearPsi) - 2) * 2) / 2,
-      rearPsiHigh: Math.round(Math.min(130, Math.max(rhRearFinal, silcaResult.rearPsi) + 2) * 2) / 2,
+    setResult({
+      frontPsi: Math.round(frontPsi * 2) / 2,
+      rearPsi: Math.round(rearPsi * 2) / 2,
+      notes
     })
   }
 
   async function saveConfig() {
-    if (!configName.trim() || !reneHerse || !silca) return
+    if (!configName.trim() || !result) return
     try {
-      const avgFront = ((reneHerse.frontPsi + silca.frontPsi) / 2)
-      const avgRear = ((reneHerse.rearPsi + silca.rearPsi) / 2)
       const res = await fetch('/api/tools/tire-pressure', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -200,8 +164,8 @@ export default function TirePressurePage() {
           riderWeight: riderWeightLbs / 2.20462,
           bikeWeight: bikeWeightLbs / 2.20462,
           frontRearSplit: frontRearSplit / 100,
-          calculatedFrontPsi: avgFront,
-          calculatedRearPsi: avgRear,
+          calculatedFrontPsi: result.frontPsi,
+          calculatedRearPsi: result.rearPsi,
         })
       })
       if (res.ok) {
@@ -245,7 +209,7 @@ export default function TirePressurePage() {
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2">Tire Pressure Calculator</h1>
           <p className="text-gray-400">
-            Optimal pressure using both Rene Herse (real-road testing) and Silca (breakpoint physics) methods
+            Optimal pressure using the Silca breakpoint physics method
           </p>
         </div>
 
@@ -427,15 +391,15 @@ export default function TirePressurePage() {
 
           {/* Right: Results */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Recommended Range */}
-            {recommended && (
+            {/* Pressure Result */}
+            {result && (
               <div className="bg-gradient-to-br from-purple-500/20 to-purple-700/20 border border-purple-500/30 rounded-xl p-8">
                 <h2 className="text-2xl font-bold mb-6">Recommended Pressure</h2>
                 <div className="grid grid-cols-2 gap-8">
                   <div className="text-center">
                     <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Front</div>
                     <div className="text-5xl font-bold text-purple-400">
-                      {recommended.frontPsiLow}-{recommended.frontPsiHigh}
+                      {result.frontPsi}
                     </div>
                     <div className="text-lg text-gray-400 mt-1">PSI</div>
                     <div className="text-xs text-gray-500 mt-2">
@@ -445,7 +409,7 @@ export default function TirePressurePage() {
                   <div className="text-center">
                     <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Rear</div>
                     <div className="text-5xl font-bold text-purple-400">
-                      {recommended.rearPsiLow}-{recommended.rearPsiHigh}
+                      {result.rearPsi}
                     </div>
                     <div className="text-lg text-gray-400 mt-1">PSI</div>
                     <div className="text-xs text-gray-500 mt-2">
@@ -453,66 +417,21 @@ export default function TirePressurePage() {
                     </div>
                   </div>
                 </div>
-                <div className="mt-6 flex items-start gap-2 text-sm text-gray-400 bg-gray-800/50 rounded-lg p-3">
+                {result.notes.length > 0 && (
+                  <div className="mt-6 space-y-1">
+                    {result.notes.map((note, i) => (
+                      <p key={i} className="text-xs text-gray-500">• {note}</p>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-4 flex items-start gap-2 text-sm text-gray-400 bg-gray-800/50 rounded-lg p-3">
                   <Info size={16} className="flex-shrink-0 mt-0.5" />
                   <span>
-                    Range spans both calculation methods. Start in the middle and adjust:
-                    lower if you want more comfort and grip, higher if you want less rolling resistance on smooth roads.
+                    Adjust based on feel: lower for more comfort and grip, higher for less rolling resistance on smooth roads.
                   </span>
                 </div>
               </div>
             )}
-
-            {/* Method Comparison */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {reneHerse && (
-                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6">
-                  <h3 className="text-lg font-bold mb-1 text-blue-400">Rene Herse</h3>
-                  <p className="text-xs text-gray-500 mb-4">Bicycle Quarterly Real-Road Testing</p>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="bg-gray-700/50 rounded-lg p-4 text-center">
-                      <div className="text-sm text-gray-400">Front</div>
-                      <div className="text-3xl font-bold">{reneHerse.frontPsi}</div>
-                      <div className="text-sm text-gray-400">PSI</div>
-                    </div>
-                    <div className="bg-gray-700/50 rounded-lg p-4 text-center">
-                      <div className="text-sm text-gray-400">Rear</div>
-                      <div className="text-3xl font-bold">{reneHerse.rearPsi}</div>
-                      <div className="text-sm text-gray-400">PSI</div>
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    {reneHerse.notes.map((note, i) => (
-                      <p key={i} className="text-xs text-gray-500">• {note}</p>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {silca && (
-                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6">
-                  <h3 className="text-lg font-bold mb-1 text-green-400">Silca</h3>
-                  <p className="text-xs text-gray-500 mb-4">Breakpoint Physics Model</p>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="bg-gray-700/50 rounded-lg p-4 text-center">
-                      <div className="text-sm text-gray-400">Front</div>
-                      <div className="text-3xl font-bold">{silca.frontPsi}</div>
-                      <div className="text-sm text-gray-400">PSI</div>
-                    </div>
-                    <div className="bg-gray-700/50 rounded-lg p-4 text-center">
-                      <div className="text-sm text-gray-400">Rear</div>
-                      <div className="text-3xl font-bold">{silca.rearPsi}</div>
-                      <div className="text-sm text-gray-400">PSI</div>
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    {silca.notes.map((note, i) => (
-                      <p key={i} className="text-xs text-gray-500">• {note}</p>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
 
             {/* Save Configuration */}
             <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6">
@@ -581,25 +500,22 @@ export default function TirePressurePage() {
 
             {/* How It Works */}
             <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6">
-              <h3 className="text-lg font-bold mb-4">How This Works</h3>
+              <h3 className="text-lg font-bold mb-4">How It Works</h3>
               <div className="space-y-3 text-sm text-gray-400">
                 <p>
-                  <strong className="text-blue-400">Rene Herse / Bicycle Quarterly:</strong> Based on
-                  real-road rolling resistance testing. They found that on actual roads (not smooth
-                  drums), lower pressures often roll faster because the tire absorbs bumps instead of
-                  bouncing over them. This method tends to recommend slightly lower pressures.
-                </p>
-                <p>
-                  <strong className="text-green-400">Silca:</strong> Uses breakpoint physics to find
-                  the pressure where the tire contact patch transitions from a round shape to a flat
+                  Uses the <strong className="text-purple-400">Silca breakpoint physics</strong> model to find
+                  the optimal pressure where the tire contact patch transitions from a round shape to a flat
                   one. Below this pressure, the tire deforms too much and wastes energy. Above it,
-                  the tire bounces off imperfections. This method accounts for tire volume and casing stiffness.
+                  the tire bounces off imperfections instead of absorbing them.
                 </p>
                 <p>
-                  <strong className="text-purple-400">The recommended range</strong> spans both methods.
-                  In practice, start in the middle and adjust based on feel. If you're getting a harsh
+                  The calculation accounts for tire volume, wheel load distribution,
+                  surface roughness, and tire type (tubeless vs clincher vs tubular).
+                </p>
+                <p>
+                  In practice, use these as a starting point and adjust based on feel. If you&apos;re getting a harsh
                   ride or losing traction in corners, go lower. If the tires feel wallowy in turns or
-                  you're getting pinch flats (clinchers), go higher.
+                  you&apos;re getting pinch flats (clinchers), go higher.
                 </p>
               </div>
             </div>

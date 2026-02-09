@@ -54,6 +54,10 @@ export async function GET() {
       await sql`UPDATE bikes SET bike_type = 'gravel' WHERE id = ${seigla.id}`;
       results.push('Seigla: updated bike type to gravel');
     }
+    if (uthald && uthald.bike_type !== 'gravel') {
+      await sql`UPDATE bikes SET bike_type = 'gravel' WHERE id = ${uthald.id}`;
+      results.push('Uthald: updated bike type to gravel');
+    }
 
     // Find Kitsap Color Classic activity for Seigla
     let kitsapActivity: any = null;
@@ -130,6 +134,7 @@ export async function GET() {
             componentType: comp.componentType,
             brand: comp.brand,
             model: comp.model,
+            installDate: '2025-11-01',
             installDistance: 0,
             expectedLifetimeDistance: comp.expectedLifetimeDistance,
           });

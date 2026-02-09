@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Nav } from "@/components/nav"
-import { Bike, Plus, RefreshCw, ChevronRight, Mountain, Activity } from "lucide-react"
+import { Bike, Plus, RefreshCw, ChevronRight, Mountain, Activity, Trash2 } from "lucide-react"
 
 interface BikeData {
   id: number
@@ -73,9 +73,10 @@ export default function BikesPage() {
       const data = await res.json().catch(() => ({}))
       if (res.ok) {
         if (data.message) {
-          setError(data.message) // "No bikes found on Strava" info message
+          setError(data.message)
+        } else {
+          await fetchBikes()
         }
-        await fetchBikes()
       } else {
         setError(data.error || `Sync failed (${res.status})`)
       }
@@ -84,6 +85,23 @@ export default function BikesPage() {
       console.error('Error syncing bikes:', e)
     } finally {
       setSyncing(false)
+    }
+  }
+
+  async function deleteBike(bikeId: number, bikeName: string) {
+    if (!confirm(`Delete "${bikeName}"? This will also remove all its components and maintenance schedules.`)) return
+    setError(null)
+    try {
+      const res = await fetch(`/api/bikes/${bikeId}`, { method: 'DELETE' })
+      if (res.ok) {
+        setBikes(prev => prev.filter(b => b.id !== bikeId))
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error || `Failed to delete bike (${res.status})`)
+      }
+    } catch (e) {
+      setError('Failed to delete bike')
+      console.error('Error deleting bike:', e)
     }
   }
 
@@ -261,63 +279,74 @@ export default function BikesPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {bikes.map(bike => (
-              <button
+              <div
                 key={bike.id}
-                onClick={() => router.push(`/bikes/${bike.id}`)}
-                className={`bg-gradient-to-br ${bikeTypeColors[bike.bike_type] || bikeTypeColors.road} border rounded-xl p-6 text-left hover:scale-[1.02] transition-all group`}
+                className={`bg-gradient-to-br ${bikeTypeColors[bike.bike_type] || bikeTypeColors.road} border rounded-xl p-6 text-left hover:scale-[1.02] transition-all group relative`}
               >
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="text-xl font-bold">{bike.name}</h3>
-                    {(bike.brand || bike.model) && (
-                      <p className="text-sm text-gray-400 mt-1">
-                        {[bike.brand, bike.model].filter(Boolean).join(' ')}
-                      </p>
-                    )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); deleteBike(bike.id, bike.name) }}
+                  className="absolute top-3 right-3 p-1.5 rounded-lg bg-gray-900/50 text-gray-500 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all z-10"
+                  title="Delete bike"
+                >
+                  <Trash2 size={14} />
+                </button>
+                <button
+                  onClick={() => router.push(`/bikes/${bike.id}`)}
+                  className="w-full text-left"
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h3 className="text-xl font-bold">{bike.name}</h3>
+                      {(bike.brand || bike.model) && (
+                        <p className="text-sm text-gray-400 mt-1">
+                          {[bike.brand, bike.model].filter(Boolean).join(' ')}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs bg-gray-800/50 px-2 py-1 rounded uppercase">
+                        {bikeTypeLabels[bike.bike_type] || bike.bike_type}
+                      </span>
+                      <ChevronRight size={20} className="text-gray-500 group-hover:text-white transition-colors" />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs bg-gray-800/50 px-2 py-1 rounded uppercase">
-                      {bikeTypeLabels[bike.bike_type] || bike.bike_type}
-                    </span>
-                    <ChevronRight size={20} className="text-gray-500 group-hover:text-white transition-colors" />
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <div className="text-2xl font-bold">
-                      {(Number(bike.total_distance) * 0.000621371).toFixed(0)}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <div className="text-2xl font-bold">
+                        {(Number(bike.total_distance) * 0.000621371).toFixed(0)}
+                      </div>
+                      <div className="text-xs text-gray-400 flex items-center gap-1">
+                        <Activity size={12} />
+                        miles
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-400 flex items-center gap-1">
-                      <Activity size={12} />
-                      miles
+                    <div>
+                      <div className="text-2xl font-bold">{bike.ride_count}</div>
+                      <div className="text-xs text-gray-400">rides</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold">
+                        {(Number(bike.total_elevation) * 3.28084).toFixed(0)}
+                      </div>
+                      <div className="text-xs text-gray-400 flex items-center gap-1">
+                        <Mountain size={12} />
+                        ft
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <div className="text-2xl font-bold">{bike.ride_count}</div>
-                    <div className="text-xs text-gray-400">rides</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold">
-                      {(Number(bike.total_elevation) * 3.28084).toFixed(0)}
-                    </div>
-                    <div className="text-xs text-gray-400 flex items-center gap-1">
-                      <Mountain size={12} />
-                      ft
-                    </div>
-                  </div>
-                </div>
 
-                {bike.weight && (
-                  <div className="text-xs text-gray-500 mt-4">
-                    {(Number(bike.weight) * 2.20462).toFixed(1)} lbs
-                  </div>
-                )}
+                  {bike.weight && (
+                    <div className="text-xs text-gray-500 mt-4">
+                      {(Number(bike.weight) * 2.20462).toFixed(1)} lbs
+                    </div>
+                  )}
 
-                {!bike.is_active && (
-                  <div className="text-xs text-red-400 mt-2">Retired</div>
-                )}
-              </button>
+                  {!bike.is_active && (
+                    <div className="text-xs text-red-400 mt-2">Retired</div>
+                  )}
+                </button>
+              </div>
             ))}
           </div>
         )}

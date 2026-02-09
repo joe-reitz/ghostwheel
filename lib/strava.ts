@@ -9,7 +9,7 @@ export function getStravaAuthUrl() {
     client_id: STRAVA_CLIENT_ID,
     redirect_uri: STRAVA_REDIRECT_URI,
     response_type: "code",
-    scope: "activity:read_all",
+    scope: "read,activity:read_all,profile:read_all",
   })
   return `https://www.strava.com/oauth/authorize?${params}`
 }

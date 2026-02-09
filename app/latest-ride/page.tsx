@@ -219,15 +219,24 @@ export default function LatestRidePage() {
       <div className="min-h-screen bg-gradient-dark">
         <Nav />
         <main className="mx-auto max-w-7xl px-4 py-8">
-          <div className="text-center text-white">
-            <h2 className="text-2xl font-bold mb-4">No rides found</h2>
-            <p className="text-gray-400 mb-6">Connect your Strava account to see your latest ride</p>
-            <button
-              onClick={() => router.push('/settings')}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg transition-colors"
-            >
-              Go to Settings
-            </button>
+          <div className="text-center text-white py-16">
+            <Activity size={64} className="text-gray-600 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold mb-2">No rides found</h2>
+            <p className="text-gray-400 mb-6">Sync your rides from Strava to see your latest ride analysis</p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => router.push('/settings')}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg transition-colors"
+              >
+                Go to Settings
+              </button>
+              <button
+                onClick={() => router.push('/rides')}
+                className="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-colors"
+              >
+                View Rides
+              </button>
+            </div>
           </div>
         </main>
       </div>

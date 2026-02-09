@@ -5,10 +5,25 @@ import { getLatestActivity } from '@/lib/db';
 export async function GET() {
   try {
     const sessionUser = await requireAuth();
-    const activity = await getLatestActivity(sessionUser.id);
+
+    let activity;
+    try {
+      activity = await getLatestActivity(sessionUser.id);
+    } catch (dbError: any) {
+      if (dbError.message?.includes('does not exist') || dbError.message?.includes('relation')) {
+        return NextResponse.json(
+          { error: 'No rides synced yet. Go to Settings to sync your Strava rides.' },
+          { status: 404 }
+        );
+      }
+      throw dbError;
+    }
 
     if (!activity) {
-      return NextResponse.json({ error: 'No rides found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'No rides found. Sync your rides from Strava first.' },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json(activity);

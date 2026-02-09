@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/session';
-import { getActivityStreams } from '@/lib/strava';
+import { getActivityStreams, refreshStravaToken } from '@/lib/strava';
+import { updateUserTokens } from '@/lib/db';
 
 export async function GET(
   request: NextRequest,
@@ -8,19 +9,32 @@ export async function GET(
 ) {
   try {
     const user = await getSessionUser();
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { id: activityId } = await params;
 
+    // Refresh token if expired
+    let accessToken = user.accessToken;
+    if (user.tokenExpiresAt && new Date(user.tokenExpiresAt) < new Date()) {
+      const refreshed = await refreshStravaToken(user.refreshToken);
+      accessToken = refreshed.access_token;
+      await updateUserTokens(
+        user.id,
+        refreshed.access_token,
+        refreshed.refresh_token,
+        new Date(refreshed.expires_at * 1000)
+      );
+    }
+
     // Fetch activity details from Strava
     const response = await fetch(
       `https://www.strava.com/api/v3/activities/${activityId}`,
       {
         headers: {
-          Authorization: `Bearer ${user.accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
         },
       }
     );
@@ -34,7 +48,7 @@ export async function GET(
     // Fetch stream data for charts
     let streamData = null;
     try {
-      streamData = await getActivityStreams(user.accessToken, parseInt(activityId));
+      streamData = await getActivityStreams(accessToken, parseInt(activityId));
     } catch (streamError) {
       console.warn('Could not fetch stream data:', streamError);
       // Continue without stream data - charts will fall back to showing basic info

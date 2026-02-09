@@ -405,7 +405,7 @@ export async function updateBike(bikeId: number, data: {
 }
 
 export async function deleteBike(bikeId: number) {
-  await sql`UPDATE bikes SET is_active = false WHERE id = ${bikeId}`;
+  await sql`DELETE FROM bikes WHERE id = ${bikeId}`;
 }
 
 export async function updateBikeStats(bikeId: number) {

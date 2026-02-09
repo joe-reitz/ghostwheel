@@ -108,3 +108,8 @@ export async function getAthleteProfile(accessToken: string) {
   return response.json()
 }
 
+export async function getAthleteGear(accessToken: string) {
+  const profile = await getAthleteProfile(accessToken)
+  return profile.bikes || []
+}
+

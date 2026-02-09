@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getStravaActivities, refreshStravaToken, getActivityStreams } from '@/lib/strava';
-import { 
-  getUserByStravaId, 
-  createOrUpdateActivity, 
-  updateTrainingLoad
+import {
+  getUserByStravaId,
+  createOrUpdateActivity,
+  updateTrainingLoad,
+  getBikeByStravaGearId,
+  updateBikeStats
 } from '@/lib/db';
 import {
   calculateCTL,
@@ -157,6 +159,18 @@ export async function GET(request: Request) {
           }
         }
 
+        // Look up bike_id from gear_id
+        let bikeId = null;
+        const stravaGearId = activity.gear_id || null;
+        if (stravaGearId) {
+          try {
+            const bike = await getBikeByStravaGearId(user.id, stravaGearId);
+            if (bike) bikeId = bike.id;
+          } catch (e) {
+            // bikes table may not exist yet, continue without bike association
+          }
+        }
+
         // Store activity in database
         try {
           const storedActivity = await createOrUpdateActivity({
@@ -185,7 +199,9 @@ export async function GET(request: Request) {
             intensityFactor: calculatedMetrics.intensityFactor,
             variabilityIndex: calculatedMetrics.variabilityIndex,
             summaryPolyline: activity.map?.summary_polyline,
-            mapId: activity.map?.id
+            mapId: activity.map?.id,
+            stravaGearId,
+            bikeId
           });
 
           // If analyze flag is set and this is a recent ride, generate AI analysis
@@ -266,6 +282,19 @@ export async function GET(request: Request) {
       } catch (tlError) {
         console.error(`Error updating training load for ${date}:`, tlError);
         // Continue processing even if this fails
+      }
+    }
+
+    // Update bike stats for any bikes referenced in synced activities
+    const bikeIdsToUpdate = new Set<number>();
+    processedActivities.forEach((a: any) => {
+      if (a.bikeId) bikeIdsToUpdate.add(a.bikeId);
+    });
+    for (const bikeId of bikeIdsToUpdate) {
+      try {
+        await updateBikeStats(bikeId);
+      } catch (e) {
+        // bikes table may not exist yet
       }
     }
 

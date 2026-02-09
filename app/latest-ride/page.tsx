@@ -75,39 +75,30 @@ export default function LatestRidePage() {
 
   async function fetchLatestRide() {
     try {
-      // Fetch activities to get the latest one
-      const response = await fetch('/api/strava/activities?lookback=month')
-      
+      // Fetch latest ride from local DB (not Strava API)
+      const response = await fetch('/api/rides/latest')
+
       if (!response.ok) {
-        console.error('Failed to fetch activities:', response.status, response.statusText)
-        throw new Error('Failed to fetch activities')
-      }
-      
-      const data = await response.json()
-      console.log('Activities response:', data)
-      
-      // Handle both array and object with activities property
-      const activitiesList = Array.isArray(data) ? data : (data.activities || [])
-      
-      if (activitiesList && activitiesList.length > 0) {
-        const latestActivity = activitiesList[0]
-        console.log('Latest activity:', latestActivity)
-        
-        // Fetch full details for this ride
-        const detailsResponse = await fetch(`/api/rides/${latestActivity.strava_id}`)
-        
-        if (detailsResponse.ok) {
-          const rideData = await detailsResponse.json()
-          console.log('Ride data:', rideData)
-          setRide(rideData)
-          
-          // Fetch conversation history
-          await fetchConversationHistory(latestActivity.strava_id)
-        } else {
-          console.error('Failed to fetch ride details:', detailsResponse.status)
+        if (response.status === 404) {
+          console.log('No rides found in database')
+          return
         }
+        throw new Error('Failed to fetch latest ride')
+      }
+
+      const latestActivity = await response.json()
+
+      // Fetch full details for this ride (stream data, etc.)
+      const detailsResponse = await fetch(`/api/rides/${latestActivity.strava_id}`)
+
+      if (detailsResponse.ok) {
+        const rideData = await detailsResponse.json()
+        setRide(rideData)
+
+        // Fetch conversation history
+        await fetchConversationHistory(latestActivity.strava_id)
       } else {
-        console.log('No activities found')
+        console.error('Failed to fetch ride details:', detailsResponse.status)
       }
     } catch (error) {
       console.error('Error fetching latest ride:', error)

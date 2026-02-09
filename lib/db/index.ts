@@ -88,7 +88,8 @@ export async function createOrUpdateActivity(activityData: any) {
       average_watts, max_watts, weighted_power, average_heartrate,
       max_heartrate, average_cadence, max_cadence, kilojoules,
       device_watts, has_heartrate, tss, intensity_factor,
-      variability_index, summary_polyline, map_id
+      variability_index, summary_polyline, map_id,
+      strava_gear_id, bike_id
     )
     VALUES (
       ${activityData.userId}, ${activityData.stravaId}, ${activityData.name},
@@ -102,7 +103,8 @@ export async function createOrUpdateActivity(activityData: any) {
       ${activityData.kilojoules}, ${activityData.deviceWatts},
       ${activityData.hasHeartrate}, ${activityData.tss},
       ${activityData.intensityFactor}, ${activityData.variabilityIndex},
-      ${activityData.summaryPolyline}, ${activityData.mapId}
+      ${activityData.summaryPolyline}, ${activityData.mapId},
+      ${activityData.stravaGearId || null}, ${activityData.bikeId || null}
     )
     ON CONFLICT (strava_id)
     DO UPDATE SET
@@ -123,6 +125,8 @@ export async function createOrUpdateActivity(activityData: any) {
       tss = EXCLUDED.tss,
       intensity_factor = EXCLUDED.intensity_factor,
       variability_index = EXCLUDED.variability_index,
+      strava_gear_id = COALESCE(EXCLUDED.strava_gear_id, activities.strava_gear_id),
+      bike_id = COALESCE(EXCLUDED.bike_id, activities.bike_id),
       updated_at = CURRENT_TIMESTAMP
     RETURNING *
   `;
@@ -249,5 +253,423 @@ export async function getUnreadInsights(userId: number) {
     LIMIT 10
   `;
   return result.rows;
+}
+
+export async function getLatestActivity(userId: number) {
+  const result = await sql`
+    SELECT * FROM activities
+    WHERE user_id = ${userId}
+    ORDER BY start_date DESC
+    LIMIT 1
+  `;
+  return result.rows[0] || null;
+}
+
+// ============ Bikes ============
+
+export async function createOrUpdateBike(bikeData: {
+  userId: number;
+  stravaGearId?: string;
+  name: string;
+  brand?: string;
+  model?: string;
+  bikeType?: string;
+  weight?: number;
+  totalDistance?: number;
+}) {
+  if (bikeData.stravaGearId) {
+    const result = await sql`
+      INSERT INTO bikes (user_id, strava_gear_id, name, brand, model, bike_type, weight, total_distance)
+      VALUES (
+        ${bikeData.userId}, ${bikeData.stravaGearId}, ${bikeData.name},
+        ${bikeData.brand || null}, ${bikeData.model || null},
+        ${bikeData.bikeType || 'road'}, ${bikeData.weight || null},
+        ${bikeData.totalDistance || 0}
+      )
+      ON CONFLICT (user_id, strava_gear_id)
+      DO UPDATE SET
+        name = EXCLUDED.name,
+        brand = COALESCE(EXCLUDED.brand, bikes.brand),
+        model = COALESCE(EXCLUDED.model, bikes.model),
+        total_distance = EXCLUDED.total_distance,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING *
+    `;
+    return result.rows[0];
+  }
+  const result = await sql`
+    INSERT INTO bikes (user_id, name, brand, model, bike_type, weight)
+    VALUES (
+      ${bikeData.userId}, ${bikeData.name},
+      ${bikeData.brand || null}, ${bikeData.model || null},
+      ${bikeData.bikeType || 'road'}, ${bikeData.weight || null}
+    )
+    RETURNING *
+  `;
+  return result.rows[0];
+}
+
+export async function getUserBikes(userId: number) {
+  const result = await sql`
+    SELECT * FROM bikes
+    WHERE user_id = ${userId}
+    ORDER BY is_active DESC, name ASC
+  `;
+  return result.rows;
+}
+
+export async function getBikeById(bikeId: number) {
+  const result = await sql`
+    SELECT * FROM bikes WHERE id = ${bikeId}
+  `;
+  return result.rows[0] || null;
+}
+
+export async function updateBike(bikeId: number, data: {
+  name?: string;
+  brand?: string;
+  model?: string;
+  bikeType?: string;
+  weight?: number;
+  isActive?: boolean;
+  notes?: string;
+}) {
+  const result = await sql`
+    UPDATE bikes SET
+      name = COALESCE(${data.name || null}, name),
+      brand = COALESCE(${data.brand || null}, brand),
+      model = COALESCE(${data.model || null}, model),
+      bike_type = COALESCE(${data.bikeType || null}, bike_type),
+      weight = COALESCE(${data.weight || null}, weight),
+      is_active = COALESCE(${data.isActive ?? null}, is_active),
+      notes = COALESCE(${data.notes || null}, notes),
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${bikeId}
+    RETURNING *
+  `;
+  return result.rows[0];
+}
+
+export async function deleteBike(bikeId: number) {
+  await sql`UPDATE bikes SET is_active = false WHERE id = ${bikeId}`;
+}
+
+export async function updateBikeStats(bikeId: number) {
+  await sql`
+    UPDATE bikes SET
+      total_distance = COALESCE((
+        SELECT SUM(distance) FROM activities WHERE bike_id = ${bikeId}
+      ), 0),
+      ride_count = COALESCE((
+        SELECT COUNT(*) FROM activities WHERE bike_id = ${bikeId}
+      ), 0),
+      total_elevation = COALESCE((
+        SELECT SUM(total_elevation_gain) FROM activities WHERE bike_id = ${bikeId}
+      ), 0),
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${bikeId}
+  `;
+}
+
+export async function getBikeByStravaGearId(userId: number, stravaGearId: string) {
+  const result = await sql`
+    SELECT * FROM bikes
+    WHERE user_id = ${userId} AND strava_gear_id = ${stravaGearId}
+  `;
+  return result.rows[0] || null;
+}
+
+// ============ Components ============
+
+export async function getBikeComponents(bikeId: number) {
+  const result = await sql`
+    SELECT * FROM components
+    WHERE bike_id = ${bikeId} AND status = 'active'
+    ORDER BY component_type ASC
+  `;
+  return result.rows;
+}
+
+export async function createComponent(data: {
+  userId: number;
+  bikeId: number;
+  componentType: string;
+  brand?: string;
+  model?: string;
+  installDate?: string;
+  installDistance?: number;
+  expectedLifetimeDistance?: number;
+  expectedLifetimeDays?: number;
+  notes?: string;
+}) {
+  const result = await sql`
+    INSERT INTO components (
+      user_id, bike_id, component_type, brand, model,
+      install_date, install_distance, expected_lifetime_distance,
+      expected_lifetime_days, notes
+    )
+    VALUES (
+      ${data.userId}, ${data.bikeId}, ${data.componentType},
+      ${data.brand || null}, ${data.model || null},
+      ${data.installDate || new Date().toISOString().split('T')[0]},
+      ${data.installDistance || 0},
+      ${data.expectedLifetimeDistance || null},
+      ${data.expectedLifetimeDays || null},
+      ${data.notes || null}
+    )
+    RETURNING *
+  `;
+
+  // Record install event
+  await sql`
+    INSERT INTO component_history (component_id, event_type, to_bike_id, distance_at_event, notes)
+    VALUES (${result.rows[0].id}, 'installed', ${data.bikeId}, ${data.installDistance || 0}, 'Initial install')
+  `;
+
+  return result.rows[0];
+}
+
+export async function updateComponent(componentId: number, data: {
+  currentDistance?: number;
+  brand?: string;
+  model?: string;
+  expectedLifetimeDistance?: number;
+  expectedLifetimeDays?: number;
+  notes?: string;
+}) {
+  const result = await sql`
+    UPDATE components SET
+      current_distance = COALESCE(${data.currentDistance ?? null}, current_distance),
+      brand = COALESCE(${data.brand || null}, brand),
+      model = COALESCE(${data.model || null}, model),
+      expected_lifetime_distance = COALESCE(${data.expectedLifetimeDistance ?? null}, expected_lifetime_distance),
+      expected_lifetime_days = COALESCE(${data.expectedLifetimeDays ?? null}, expected_lifetime_days),
+      notes = COALESCE(${data.notes || null}, notes),
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${componentId}
+    RETURNING *
+  `;
+  return result.rows[0];
+}
+
+export async function moveComponent(componentId: number, toBikeId: number, distanceAtEvent: number) {
+  const component = await sql`SELECT * FROM components WHERE id = ${componentId}`;
+  if (!component.rows[0]) return null;
+
+  const fromBikeId = component.rows[0].bike_id;
+
+  await sql`
+    UPDATE components SET
+      bike_id = ${toBikeId},
+      status = 'active',
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${componentId}
+  `;
+
+  await sql`
+    INSERT INTO component_history (component_id, event_type, from_bike_id, to_bike_id, distance_at_event, notes)
+    VALUES (${componentId}, 'moved', ${fromBikeId}, ${toBikeId}, ${distanceAtEvent}, ${`Moved from bike ${fromBikeId} to bike ${toBikeId}`})
+  `;
+
+  return { success: true };
+}
+
+export async function retireComponent(componentId: number, reason: string, distanceAtEvent: number) {
+  await sql`
+    UPDATE components SET
+      status = 'retired',
+      retirement_reason = ${reason},
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${componentId}
+  `;
+
+  const component = await sql`SELECT * FROM components WHERE id = ${componentId}`;
+
+  await sql`
+    INSERT INTO component_history (component_id, event_type, from_bike_id, distance_at_event, notes)
+    VALUES (${componentId}, 'retired', ${component.rows[0]?.bike_id || null}, ${distanceAtEvent}, ${reason})
+  `;
+
+  return { success: true };
+}
+
+export async function getComponentHistory(componentId: number) {
+  const result = await sql`
+    SELECT ch.*,
+      fb.name as from_bike_name,
+      tb.name as to_bike_name
+    FROM component_history ch
+    LEFT JOIN bikes fb ON ch.from_bike_id = fb.id
+    LEFT JOIN bikes tb ON ch.to_bike_id = tb.id
+    WHERE ch.component_id = ${componentId}
+    ORDER BY ch.created_at DESC
+  `;
+  return result.rows;
+}
+
+// ============ Maintenance Schedules ============
+
+export async function getMaintenanceSchedules(userId: number, bikeId?: number) {
+  if (bikeId) {
+    const result = await sql`
+      SELECT ms.*, b.name as bike_name
+      FROM maintenance_schedules ms
+      JOIN bikes b ON ms.bike_id = b.id
+      WHERE ms.user_id = ${userId} AND ms.bike_id = ${bikeId}
+      ORDER BY ms.component_type ASC
+    `;
+    return result.rows;
+  }
+  const result = await sql`
+    SELECT ms.*, b.name as bike_name
+    FROM maintenance_schedules ms
+    JOIN bikes b ON ms.bike_id = b.id
+    WHERE ms.user_id = ${userId}
+    ORDER BY b.name ASC, ms.component_type ASC
+  `;
+  return result.rows;
+}
+
+export async function createMaintenanceSchedule(data: {
+  userId: number;
+  bikeId: number;
+  componentType: string;
+  intervalDistance?: number;
+  intervalDays?: number;
+  lastServiceDate?: string;
+  lastServiceDistance?: number;
+  emailAlert?: boolean;
+}) {
+  const result = await sql`
+    INSERT INTO maintenance_schedules (
+      user_id, bike_id, component_type, interval_distance,
+      interval_days, last_service_date, last_service_distance, email_alert
+    )
+    VALUES (
+      ${data.userId}, ${data.bikeId}, ${data.componentType},
+      ${data.intervalDistance || null}, ${data.intervalDays || null},
+      ${data.lastServiceDate || new Date().toISOString().split('T')[0]},
+      ${data.lastServiceDistance || 0},
+      ${data.emailAlert || false}
+    )
+    RETURNING *
+  `;
+  return result.rows[0];
+}
+
+export async function updateMaintenanceSchedule(scheduleId: number, data: {
+  intervalDistance?: number;
+  intervalDays?: number;
+  lastServiceDate?: string;
+  lastServiceDistance?: number;
+  emailAlert?: boolean;
+}) {
+  const result = await sql`
+    UPDATE maintenance_schedules SET
+      interval_distance = COALESCE(${data.intervalDistance ?? null}, interval_distance),
+      interval_days = COALESCE(${data.intervalDays ?? null}, interval_days),
+      last_service_date = COALESCE(${data.lastServiceDate || null}, last_service_date),
+      last_service_distance = COALESCE(${data.lastServiceDistance ?? null}, last_service_distance),
+      email_alert = COALESCE(${data.emailAlert ?? null}, email_alert),
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${scheduleId}
+    RETURNING *
+  `;
+  return result.rows[0];
+}
+
+export async function getOverdueMaintenanceItems(userId: number) {
+  const result = await sql`
+    SELECT ms.*, b.name as bike_name, b.total_distance as bike_distance
+    FROM maintenance_schedules ms
+    JOIN bikes b ON ms.bike_id = b.id
+    WHERE ms.user_id = ${userId}
+    ORDER BY b.name ASC, ms.component_type ASC
+  `;
+
+  const now = new Date();
+  return result.rows.map(schedule => {
+    let distanceRemaining = null;
+    let daysRemaining = null;
+    let percentRemaining = 100;
+    let status = 'ok';
+
+    if (schedule.interval_distance && schedule.bike_distance != null) {
+      const distanceSinceService = Number(schedule.bike_distance) - Number(schedule.last_service_distance);
+      distanceRemaining = Number(schedule.interval_distance) - distanceSinceService;
+      const distPercent = (distanceRemaining / Number(schedule.interval_distance)) * 100;
+      percentRemaining = Math.min(percentRemaining, distPercent);
+    }
+
+    if (schedule.interval_days && schedule.last_service_date) {
+      const lastService = new Date(schedule.last_service_date);
+      const daysSince = Math.floor((now.getTime() - lastService.getTime()) / (1000 * 60 * 60 * 24));
+      daysRemaining = schedule.interval_days - daysSince;
+      const dayPercent = (daysRemaining / schedule.interval_days) * 100;
+      percentRemaining = Math.min(percentRemaining, dayPercent);
+    }
+
+    if (percentRemaining <= 0) status = 'overdue';
+    else if (percentRemaining <= 10) status = 'due_soon';
+
+    return {
+      ...schedule,
+      distance_remaining: distanceRemaining,
+      days_remaining: daysRemaining,
+      percent_remaining: Math.max(0, percentRemaining),
+      status
+    };
+  });
+}
+
+// ============ Tire Pressure Configs ============
+
+export async function saveTirePressureConfig(data: {
+  userId: number;
+  bikeId?: number;
+  name: string;
+  tireWidthFront: number;
+  tireWidthRear: number;
+  tireType: string;
+  surfaceType: string;
+  riderWeight: number;
+  bikeWeight: number;
+  frontRearSplit: number;
+  calculatedFrontPsi: number;
+  calculatedRearPsi: number;
+  isDefault?: boolean;
+}) {
+  const result = await sql`
+    INSERT INTO tire_pressure_configs (
+      user_id, bike_id, name, tire_width_front, tire_width_rear,
+      tire_type, surface_type, rider_weight, bike_weight,
+      front_rear_split, calculated_front_psi, calculated_rear_psi, is_default
+    )
+    VALUES (
+      ${data.userId}, ${data.bikeId || null}, ${data.name},
+      ${data.tireWidthFront}, ${data.tireWidthRear},
+      ${data.tireType}, ${data.surfaceType},
+      ${data.riderWeight}, ${data.bikeWeight},
+      ${data.frontRearSplit}, ${data.calculatedFrontPsi},
+      ${data.calculatedRearPsi}, ${data.isDefault || false}
+    )
+    RETURNING *
+  `;
+  return result.rows[0];
+}
+
+export async function getTirePressureConfigs(userId: number) {
+  const result = await sql`
+    SELECT tpc.*, b.name as bike_name
+    FROM tire_pressure_configs tpc
+    LEFT JOIN bikes b ON tpc.bike_id = b.id
+    WHERE tpc.user_id = ${userId}
+    ORDER BY tpc.is_default DESC, tpc.created_at DESC
+  `;
+  return result.rows;
+}
+
+export async function deleteTirePressureConfig(configId: number, userId: number) {
+  await sql`DELETE FROM tire_pressure_configs WHERE id = ${configId} AND user_id = ${userId}`;
 }
 

@@ -373,10 +373,20 @@ export async function getUserBikes(userId: number) {
 }
 
 export async function getBikeById(bikeId: number) {
-  const result = await sql`
-    SELECT * FROM bikes WHERE id = ${bikeId}
-  `;
-  return result.rows[0] || null;
+  try {
+    const result = await sql`
+      SELECT b.*, a.name as last_wax_activity_name
+      FROM bikes b
+      LEFT JOIN activities a ON b.last_wax_activity_id = a.id
+      WHERE b.id = ${bikeId}
+    `;
+    return result.rows[0] || null;
+  } catch {
+    const result = await sql`
+      SELECT * FROM bikes WHERE id = ${bikeId}
+    `;
+    return result.rows[0] || null;
+  }
 }
 
 export async function updateBike(bikeId: number, data: {
@@ -408,12 +418,65 @@ export async function deleteBike(bikeId: number) {
   await sql`DELETE FROM bikes WHERE id = ${bikeId}`;
 }
 
+export async function recordWax(bikeId: number, activityId?: number) {
+  if (activityId) {
+    // Calculate wax distance from the selected ride
+    const waxDistance = await calculateInstallDistanceFromActivity(bikeId, activityId);
+    const activityResult = await sql`SELECT start_date FROM activities WHERE id = ${activityId}`;
+    const waxDate = activityResult.rows[0]?.start_date || new Date();
+    const result = await sql`
+      UPDATE bikes SET
+        last_wax_distance = ${waxDistance},
+        last_wax_date = ${new Date(waxDate).toISOString().split('T')[0]},
+        last_wax_activity_id = ${activityId},
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${bikeId}
+      RETURNING *
+    `;
+    return result.rows[0];
+  }
+  const result = await sql`
+    UPDATE bikes SET
+      last_wax_distance = total_distance,
+      last_wax_date = CURRENT_DATE,
+      last_wax_activity_id = NULL,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${bikeId}
+    RETURNING *
+  `;
+  return result.rows[0];
+}
+
+export async function updateWaxInterval(bikeId: number, intervalMeters: number) {
+  const result = await sql`
+    UPDATE bikes SET
+      wax_interval = ${intervalMeters},
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${bikeId}
+    RETURNING *
+  `;
+  return result.rows[0];
+}
+
+export async function linkActivitiesToBikes(userId: number) {
+  // Backfill bike_id on activities that have strava_gear_id but no bike_id
+  await sql`
+    UPDATE activities a
+    SET bike_id = b.id
+    FROM bikes b
+    WHERE a.user_id = ${userId}
+      AND a.strava_gear_id IS NOT NULL
+      AND a.strava_gear_id = b.strava_gear_id
+      AND b.user_id = ${userId}
+      AND (a.bike_id IS NULL OR a.bike_id != b.id)
+  `;
+}
+
 export async function updateBikeStats(bikeId: number) {
+  // Only update ride_count and total_elevation from synced activities.
+  // total_distance is kept from Strava's gear data (more accurate, includes all rides).
   await sql`
     UPDATE bikes SET
-      total_distance = COALESCE((
-        SELECT SUM(distance) FROM activities WHERE bike_id = ${bikeId}
-      ), 0),
       ride_count = COALESCE((
         SELECT COUNT(*) FROM activities WHERE bike_id = ${bikeId}
       ), 0),

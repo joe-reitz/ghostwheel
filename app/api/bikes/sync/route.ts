@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/session';
-import { createOrUpdateBike, updateUserTokens } from '@/lib/db';
+import { createOrUpdateBike, updateUserTokens, linkActivitiesToBikes, updateBikeStats } from '@/lib/db';
 import { getAthleteGear, refreshStravaToken } from '@/lib/strava';
 
 export async function POST() {
@@ -48,6 +48,12 @@ export async function POST() {
         });
       })
     );
+
+    // Link any existing activities to bikes via strava_gear_id and recalculate stats
+    await linkActivitiesToBikes(sessionUser.id);
+    for (const bike of syncedBikes) {
+      await updateBikeStats(bike.id);
+    }
 
     return NextResponse.json({
       success: true,

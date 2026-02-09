@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { Nav } from "@/components/nav"
-import { ArrowLeft, Plus, Trash2, ArrowRightLeft, Settings, Activity, Mountain, Pencil } from "lucide-react"
+import { ArrowLeft, Plus, Trash2, ArrowRightLeft, Settings, Activity, Mountain, Pencil, Droplets } from "lucide-react"
 
 interface BikeData {
   id: number
@@ -17,6 +17,11 @@ interface BikeData {
   ride_count: number
   total_elevation: number
   notes?: string
+  last_wax_distance?: number
+  last_wax_date?: string
+  wax_interval?: number
+  last_wax_activity_id?: number
+  last_wax_activity_name?: string
 }
 
 interface ComponentData {
@@ -77,6 +82,8 @@ export default function BikeDetailPage() {
   const [moveTarget, setMoveTarget] = useState<{ componentId: number; show: boolean }>({ componentId: 0, show: false })
   const [retireTarget, setRetireTarget] = useState<{ componentId: number; show: boolean; reason: string }>({ componentId: 0, show: false, reason: '' })
   const [editTarget, setEditTarget] = useState<{ componentId: number; show: boolean; lifetimeMiles: string; installActivityId: string }>({ componentId: 0, show: false, lifetimeMiles: '', installActivityId: '' })
+  const [showWaxPicker, setShowWaxPicker] = useState(false)
+  const [waxActivityId, setWaxActivityId] = useState('')
 
   useEffect(() => {
     fetchBike()
@@ -217,6 +224,36 @@ export default function BikeDetailPage() {
     if (bikeActivities.length === 0) fetchBikeActivities()
   }
 
+  async function handleWax(activityId?: number) {
+    try {
+      const res = await fetch(`/api/bikes/${bikeId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'wax', activityId: activityId || undefined })
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setBike(updated)
+        setShowWaxPicker(false)
+        setWaxActivityId('')
+      }
+    } catch (e) {
+      console.error('Error recording wax:', e)
+    }
+  }
+
+  function getWaxMilesSince(): number {
+    if (!bike) return 0
+    const lastWax = Number(bike.last_wax_distance || 0)
+    const current = Number(bike.total_distance || 0)
+    return (current - lastWax) * 0.000621371
+  }
+
+  function getWaxIntervalMiles(): number {
+    if (!bike?.wax_interval) return 200
+    return Number(bike.wax_interval) * 0.000621371
+  }
+
   function getComponentPercentRemaining(comp: ComponentData) {
     if (!comp.expected_lifetime_distance) return null
     const bikeDistAtInstall = Number(comp.install_distance)
@@ -310,6 +347,109 @@ export default function BikeDetailPage() {
               <Settings className="text-purple-400 mb-2" size={20} />
               <div className="text-3xl font-bold">{(Number(bike.weight) * 2.20462).toFixed(1)}</div>
               <div className="text-sm text-gray-400">lbs</div>
+            </div>
+          )}
+        </div>
+
+        {/* Chain Wax Tracker */}
+        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-3">
+              <Droplets className="text-amber-400" size={24} />
+              <h2 className="text-xl font-bold">Chain Wax</h2>
+            </div>
+            <button
+              onClick={() => {
+                setShowWaxPicker(!showWaxPicker)
+                if (!showWaxPicker && bikeActivities.length === 0) fetchBikeActivities()
+              }}
+              className="bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              Record Wax
+            </button>
+          </div>
+          {(() => {
+            const milesSince = getWaxMilesSince()
+            const interval = getWaxIntervalMiles()
+            const pctUsed = Math.min(100, (milesSince / interval) * 100)
+            const pctRemaining = Math.max(0, 100 - pctUsed)
+            return (
+              <>
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-gray-400">
+                    {milesSince.toFixed(0)} mi since last wax
+                  </span>
+                  <span className={`font-medium ${
+                    pctRemaining <= 0 ? 'text-red-400' :
+                    pctRemaining <= 20 ? 'text-yellow-400' :
+                    'text-green-400'
+                  }`}>
+                    {pctRemaining > 0 ? `${(interval - milesSince).toFixed(0)} mi remaining` : 'Time to re-wax!'}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-600 rounded-full h-3 mb-3">
+                  <div
+                    className={`h-3 rounded-full transition-all ${
+                      pctRemaining <= 0 ? 'bg-red-500' :
+                      pctRemaining <= 20 ? 'bg-yellow-500' :
+                      'bg-amber-500'
+                    }`}
+                    style={{ width: `${Math.min(100, pctUsed)}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>Interval: {interval.toFixed(0)} mi</span>
+                  <span>
+                    {bike?.last_wax_activity_name
+                      ? `Last wax: ${bike.last_wax_activity_name}`
+                      : bike?.last_wax_date
+                        ? `Last waxed: ${new Date(bike.last_wax_date).toLocaleDateString()}`
+                        : 'No wax recorded'}
+                  </span>
+                </div>
+              </>
+            )
+          })()}
+
+          {/* Wax ride picker */}
+          {showWaxPicker && (
+            <div className="mt-4 p-3 bg-gray-700/50 rounded-lg border border-amber-500/30">
+              <p className="text-sm text-gray-400 mb-2">Which ride did you last wax before?</p>
+              <select
+                value={waxActivityId}
+                onChange={e => setWaxActivityId(e.target.value)}
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm focus:border-amber-500 focus:outline-none mb-3"
+              >
+                <option value="">Just now (current mileage)</option>
+                {bikeActivities
+                  .sort((a, b) => {
+                    // Sort "fresh chain" rides to top
+                    const aFresh = a.name.toLowerCase().includes('fresh chain') ? 1 : 0
+                    const bFresh = b.name.toLowerCase().includes('fresh chain') ? 1 : 0
+                    if (aFresh !== bFresh) return bFresh - aFresh
+                    return new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
+                  })
+                  .map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.name.toLowerCase().includes('fresh chain') ? '\u2728 ' : ''}
+                      {a.name} — {new Date(a.start_date).toLocaleDateString()} ({(Number(a.distance) * 0.000621371).toFixed(1)} mi)
+                    </option>
+                  ))}
+              </select>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleWax(waxActivityId ? Number(waxActivityId) : undefined)}
+                  className="bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  Confirm
+                </button>
+                <button
+                  onClick={() => { setShowWaxPicker(false); setWaxActivityId('') }}
+                  className="text-gray-400 hover:text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
         </div>

@@ -147,6 +147,12 @@ export async function GET() {
     console.log('Adding install_activity_id to components...');
     await sql`ALTER TABLE components ADD COLUMN IF NOT EXISTS install_activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL`;
 
+    console.log('Adding wax tracking columns to bikes...');
+    await sql`ALTER TABLE bikes ADD COLUMN IF NOT EXISTS last_wax_distance DECIMAL(12,2) DEFAULT 0`;
+    await sql`ALTER TABLE bikes ADD COLUMN IF NOT EXISTS last_wax_date DATE`;
+    await sql`ALTER TABLE bikes ADD COLUMN IF NOT EXISTS wax_interval DECIMAL(12,2) DEFAULT 804670`;
+    await sql`ALTER TABLE bikes ADD COLUMN IF NOT EXISTS last_wax_activity_id INTEGER`;
+
     console.log('Creating triggers...');
     await sql`
       CREATE OR REPLACE FUNCTION update_updated_at_column()

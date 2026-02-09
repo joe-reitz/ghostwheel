@@ -43,6 +43,10 @@ export async function refreshStravaToken(refreshToken: string) {
       grant_type: "refresh_token",
     }),
   })
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => '')
+    throw new Error(`Strava token refresh failed (${response.status}): ${errorBody}`)
+  }
   return response.json()
 }
 

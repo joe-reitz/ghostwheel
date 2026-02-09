@@ -70,10 +70,13 @@ export default function BikesPage() {
     setError(null)
     try {
       const res = await fetch('/api/bikes/sync', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
       if (res.ok) {
+        if (data.message) {
+          setError(data.message) // "No bikes found on Strava" info message
+        }
         await fetchBikes()
       } else {
-        const data = await res.json().catch(() => ({}))
         setError(data.error || `Sync failed (${res.status})`)
       }
     } catch (e) {

@@ -1,30 +1,41 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/session';
-import { getUserByStravaId, createOrUpdateBike } from '@/lib/db';
+import { createOrUpdateBike, updateUserTokens } from '@/lib/db';
 import { getAthleteGear, refreshStravaToken } from '@/lib/strava';
 
 export async function POST() {
   try {
     const sessionUser = await requireAuth();
-    const user = await getUserByStravaId(sessionUser.stravaId);
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    // Refresh token if needed
-    let accessToken = user.access_token;
-    if (user.token_expires_at && new Date(user.token_expires_at) < new Date()) {
-      const refreshedData = await refreshStravaToken(user.refresh_token);
-      accessToken = refreshedData.access_token;
+    // Refresh token if expired
+    let accessToken = sessionUser.accessToken;
+    if (sessionUser.tokenExpiresAt && new Date(sessionUser.tokenExpiresAt) < new Date()) {
+      const refreshed = await refreshStravaToken(sessionUser.refreshToken);
+      accessToken = refreshed.access_token;
+      // Save refreshed tokens back to DB
+      await updateUserTokens(
+        sessionUser.id,
+        refreshed.access_token,
+        refreshed.refresh_token,
+        new Date(refreshed.expires_at * 1000)
+      );
     }
 
     const stravaBikes = await getAthleteGear(accessToken);
 
+    if (!stravaBikes || stravaBikes.length === 0) {
+      return NextResponse.json({
+        success: true,
+        bikes: [],
+        count: 0,
+        message: 'No bikes found on your Strava profile. Add bikes in Strava settings first, or use "Add Bike" to create one manually.'
+      });
+    }
+
     const syncedBikes = await Promise.all(
       stravaBikes.map(async (bike: any) => {
         return createOrUpdateBike({
-          userId: user.id,
+          userId: sessionUser.id,
           stravaGearId: bike.id,
           name: bike.name || 'Unnamed Bike',
           brand: bike.brand_name || undefined,
@@ -45,7 +56,7 @@ export async function POST() {
     });
   } catch (error: any) {
     if (error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized — please log in again' }, { status: 401 });
     }
     console.error('Error syncing bikes:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

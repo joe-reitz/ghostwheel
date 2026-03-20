@@ -130,9 +130,9 @@ export default function TrainingPage() {
               <div className="bg-red-500/10 border border-red-500 rounded-lg p-4 mb-6">
                 <h3 className="font-bold text-red-400 mb-2">Error Generating Plan</h3>
                 <p className="text-red-200 text-sm">{error}</p>
-                {error.includes('OPENAI_API_KEY') && (
+                {error.includes('AI_GATEWAY_API_KEY') && (
                   <p className="text-red-200 text-sm mt-2">
-                    💡 <strong>Solution:</strong> Add your OpenAI API key to your environment variables in Vercel.
+                    💡 <strong>Solution:</strong> Add your AI Gateway API key to your environment variables in Vercel.
                   </p>
                 )}
               </div>

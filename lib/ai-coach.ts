@@ -1,19 +1,8 @@
-import OpenAI from 'openai';
+import { generateText, generateObject } from 'ai';
+import { gateway } from '@ai-sdk/gateway';
+import { z } from 'zod';
 
-// Initialize OpenAI client lazily to avoid build-time errors
-let openaiClient: OpenAI | null = null;
-
-function getOpenAIClient() {
-  if (!openaiClient) {
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY environment variable is not set');
-    }
-    openaiClient = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-  }
-  return openaiClient;
-}
+const model = gateway('anthropic/claude-sonnet-4-5');
 
 export interface RideData {
   name: string;
@@ -91,31 +80,25 @@ Provide:
 1. A brief analysis of the ride quality and effort
 2. Specific feedback on pacing, power distribution, or areas of concern
 3. 2-3 concrete recommendations for improvement
-
-Format as JSON:
-{
-  "analysis": "2-3 sentence overview",
-  "feedback": "Specific observations about performance",
-  "recommendations": ["rec 1", "rec 2", "rec 3"]
-}
 `;
 
   try {
-    const completion = await getOpenAIClient().chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      response_format: { type: 'json_object' },
+    const { object } = await generateObject({
+      model,
+      system: systemPrompt,
+      prompt: userPrompt,
+      schema: z.object({
+        analysis: z.string(),
+        feedback: z.string(),
+        recommendations: z.array(z.string()),
+      }),
       temperature: 0.7,
     });
 
-    const result = JSON.parse(completion.choices[0].message.content || '{}');
     return {
-      analysis: result.analysis || 'Analysis unavailable',
-      feedback: result.feedback || 'No specific feedback',
-      recommendations: result.recommendations || []
+      analysis: object.analysis || 'Analysis unavailable',
+      feedback: object.feedback || 'No specific feedback',
+      recommendations: object.recommendations || []
     };
   } catch (error) {
     console.error('Error analyzing ride:', error);
@@ -167,16 +150,14 @@ Keep it under 200 words, be specific and actionable.
 `;
 
   try {
-    const completion = await getOpenAIClient().chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
+    const { text } = await generateText({
+      model,
+      system: systemPrompt,
+      prompt: userPrompt,
       temperature: 0.8,
     });
 
-    return completion.choices[0].message.content || 'Summary unavailable';
+    return text || 'Summary unavailable';
   } catch (error) {
     console.error('Error generating weekly summary:', error);
     return 'Unable to generate weekly summary at this time.';
@@ -218,40 +199,29 @@ Requirements:
    - Progressive long rides (building to 120+ miles)
    - Brick workouts (back-to-back long days)
    - Nutrition practice on long rides
-
-Format as JSON with this structure:
-{
-  "totalWeeks": number,
-  "phases": [
-    {
-      "name": "Base Building",
-      "weeks": number,
-      "focus": "description",
-      "weeklyStructure": {
-        "monday": "workout description",
-        "tuesday": "workout description",
-        ...
-      }
-    }
-  ],
-  "keyWorkouts": ["workout 1", "workout 2", ...],
-  "nutritionGuidance": "string",
-  "gearRecommendations": "string"
-}
 `;
 
   try {
-    const completion = await getOpenAIClient().chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      response_format: { type: 'json_object' },
+    const { object } = await generateObject({
+      model,
+      system: systemPrompt,
+      prompt: userPrompt,
+      schema: z.object({
+        totalWeeks: z.number(),
+        phases: z.array(z.object({
+          name: z.string(),
+          weeks: z.number(),
+          focus: z.string(),
+          weeklyStructure: z.record(z.string(), z.string()),
+        })),
+        keyWorkouts: z.array(z.string()),
+        nutritionGuidance: z.string(),
+        gearRecommendations: z.string(),
+      }),
       temperature: 0.7,
     });
 
-    return JSON.parse(completion.choices[0].message.content || '{}');
+    return object;
   } catch (error) {
     console.error('Error generating training plan:', error);
     return null;
@@ -288,27 +258,26 @@ Identify:
 1. Positive patterns to reinforce
 2. Concerning patterns or potential overtraining/undertraining
 3. Opportunities for improvement
-
-Format as JSON:
-{
-  "patterns": ["pattern 1", "pattern 2"],
-  "warnings": ["warning 1", "warning 2"],
-  "opportunities": ["opportunity 1", "opportunity 2"]
-}
 `;
 
   try {
-    const completion = await getOpenAIClient().chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      response_format: { type: 'json_object' },
+    const { object } = await generateObject({
+      model,
+      system: systemPrompt,
+      prompt: userPrompt,
+      schema: z.object({
+        patterns: z.array(z.string()),
+        warnings: z.array(z.string()),
+        opportunities: z.array(z.string()),
+      }),
       temperature: 0.7,
     });
 
-    return JSON.parse(completion.choices[0].message.content || '{}');
+    return {
+      patterns: object.patterns || [],
+      warnings: object.warnings || [],
+      opportunities: object.opportunities || []
+    };
   } catch (error) {
     console.error('Error detecting patterns:', error);
     return {
@@ -318,4 +287,3 @@ Format as JSON:
     };
   }
 }
-

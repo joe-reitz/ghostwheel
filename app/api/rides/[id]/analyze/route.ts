@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/session';
-import OpenAI from 'openai';
+import { generateText } from 'ai';
+import { gateway } from '@ai-sdk/gateway';
 import { sql } from '@/lib/db';
 
-function getOpenAIClient() {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY is not configured');
-  }
-  return new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
-}
+const model = gateway('anthropic/claude-sonnet-4-5');
 
 export async function POST(
   request: NextRequest,
@@ -18,7 +12,7 @@ export async function POST(
 ) {
   try {
     const user = await getSessionUser();
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -45,7 +39,7 @@ export async function POST(
     // Fetch user profile and training context
     const userId = user.id;
     let userContext = '';
-    
+
     try {
       // User profile info (already have from session)
       if (user.ftp || user.maxHr) {
@@ -56,11 +50,11 @@ export async function POST(
 
       // Get recent activities for context
       const recentActivities = await sql`
-        SELECT name, distance, moving_time, total_elevation_gain, average_speed, 
+        SELECT name, distance, moving_time, total_elevation_gain, average_speed,
                average_watts, average_heartrate, tss, start_date
-        FROM activities 
+        FROM activities
         WHERE user_id = ${userId} AND start_date < ${activity.start_date}
-        ORDER BY start_date DESC 
+        ORDER BY start_date DESC
         LIMIT 5
       `;
 
@@ -75,8 +69,8 @@ export async function POST(
 
       // Get goals
       const goals = await sql`
-        SELECT name, target_date, target_value, type 
-        FROM goals 
+        SELECT name, target_date, target_value, type
+        FROM goals
         WHERE user_id = ${userId} AND status = 'active'
       `;
 
@@ -136,7 +130,7 @@ When analyzing rides:
 
 Training Zones (based on FTP):
 - Zone 1 (Active Recovery): < 55% FTP
-- Zone 2 (Endurance): 56-75% FTP  
+- Zone 2 (Endurance): 56-75% FTP
 - Zone 3 (Tempo): 76-90% FTP
 - Zone 4 (Threshold): 91-105% FTP
 - Zone 5 (VO2max): 106-120% FTP
@@ -164,15 +158,14 @@ TSS guidelines:
 
 Keep responses concise but informative (2-4 paragraphs unless more detail is specifically requested). Be conversational and supportive while maintaining professional expertise.`;
 
-    // Build conversation with context
-    const messages: any[] = [
-      { role: 'system', content: systemPrompt },
-      { 
-        role: 'user', 
+    // Build conversation messages for the AI SDK
+    const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
+      {
+        role: 'user',
         content: `Here's the ride data for context:\n\n${rideSummary}${userContext}\n\nI'll be asking questions about this ride.`
       },
-      { 
-        role: 'assistant', 
+      {
+        role: 'assistant',
         content: 'I have reviewed the ride data and your training context. Feel free to ask me anything about this ride, your performance, or how it fits into your training!'
       }
     ];
@@ -186,21 +179,19 @@ Keep responses concise but informative (2-4 paragraphs unless more detail is spe
     messages.push({ role: 'user', content: userPrompt });
 
     // Get AI response
-    const openai = getOpenAIClient();
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+    const { text } = await generateText({
+      model,
+      system: systemPrompt,
       messages,
       temperature: 0.7,
-      max_tokens: 1000,
+      maxOutputTokens: 1000,
     });
-
-    const aiResponse = completion.choices[0].message.content;
 
     // Store the interaction in the database for future reference
     try {
       await sql`
         INSERT INTO ride_analyses (user_id, activity_id, user_prompt, ai_response, created_at)
-        VALUES (${userId}, ${activityId}, ${userPrompt}, ${aiResponse}, NOW())
+        VALUES (${userId}, ${activityId}, ${userPrompt}, ${text}, NOW())
       `;
     } catch (error) {
       console.error('Error storing analysis:', error);
@@ -208,7 +199,7 @@ Keep responses concise but informative (2-4 paragraphs unless more detail is spe
     }
 
     return NextResponse.json({
-      response: aiResponse,
+      response: text,
       activity: {
         name: activity.name,
         distance: activity.distance,
@@ -232,7 +223,7 @@ export async function GET(
 ) {
   try {
     const user = await getSessionUser();
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -242,8 +233,8 @@ export async function GET(
 
     // Get conversation history
     const result = await sql`
-      SELECT user_prompt, ai_response, created_at 
-      FROM ride_analyses 
+      SELECT user_prompt, ai_response, created_at
+      FROM ride_analyses
       WHERE user_id = ${userId} AND activity_id = ${activityId}
       ORDER BY created_at ASC
     `;
@@ -260,4 +251,3 @@ export async function GET(
     );
   }
 }
-

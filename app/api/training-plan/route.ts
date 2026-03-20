@@ -37,7 +37,7 @@ export async function POST(request: Request) {
 
     if (!plan) {
       return NextResponse.json(
-        { error: 'Failed to generate training plan. Please check that OPENAI_API_KEY is configured.' },
+        { error: 'Failed to generate training plan. Please check that AI_GATEWAY_API_KEY is configured.' },
         { status: 500 }
       );
     }
@@ -81,8 +81,8 @@ export async function POST(request: Request) {
       { 
         error: 'Failed to create training plan', 
         details: error.message,
-        hint: error.message.includes('OPENAI_API_KEY') 
-          ? 'Please configure OPENAI_API_KEY in your environment variables'
+        hint: error.message.includes('AI_GATEWAY_API_KEY')
+          ? 'Please configure AI_GATEWAY_API_KEY in your environment variables'
           : undefined
       },
       { status: 500 }

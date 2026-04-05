@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Nav } from "@/components/nav"
+import { Markdown } from "@/components/markdown"
 import { RouteMap } from "@/components/route-map"
 import { 
   LineChart, Line, AreaChart, Area,
@@ -676,7 +677,7 @@ function RideAnalyzerContent() {
                         : 'bg-gray-700/50 border border-gray-600/30'
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    <Markdown className="text-sm">{message.content}</Markdown>
                     <p className="text-xs text-gray-500 mt-1">
                       {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>

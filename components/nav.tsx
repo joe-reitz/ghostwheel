@@ -1,7 +1,7 @@
 import Link from "next/link"
 import Image from "next/image"
-import { Button } from "@/components/ui/button"
 import { Settings } from "lucide-react"
+import { StravaLoginButton } from "@/components/strava-login-button"
 
 export function Nav() {
   return (
@@ -46,11 +46,7 @@ export function Nav() {
           <Link href="/settings" className="text-white hover:text-white/80" title="Settings">
             <Settings size={20} />
           </Link>
-          <a href="/api/auth/strava">
-            <Button variant="secondary" className="bg-[#7B3FB5] text-white hover:bg-[#6A36A0]">
-              Connect Strava
-            </Button>
-          </a>
+          <StravaLoginButton variant="secondary" className="bg-[#7B3FB5] text-white hover:bg-[#6A36A0]" />
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white">GW</div>
         </div>
       </div>

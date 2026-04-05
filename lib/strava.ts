@@ -2,12 +2,12 @@ import { stringify } from "querystring"
 
 const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID
 const STRAVA_CLIENT_SECRET = process.env.STRAVA_CLIENT_SECRET
-const STRAVA_REDIRECT_URI = process.env.STRAVA_REDIRECT_URI
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
 export function getStravaAuthUrl() {
   const params = stringify({
     client_id: STRAVA_CLIENT_ID,
-    redirect_uri: STRAVA_REDIRECT_URI,
+    redirect_uri: `${APP_URL}/api/auth/strava/callback`,
     response_type: "code",
     scope: "read,activity:read_all,profile:read_all",
   })

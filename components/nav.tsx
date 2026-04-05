@@ -46,9 +46,11 @@ export function Nav() {
           <Link href="/settings" className="text-white hover:text-white/80" title="Settings">
             <Settings size={20} />
           </Link>
-          <Button variant="secondary" className="bg-[#7B3FB5] text-white hover:bg-[#6A36A0]">
-            Connect Strava
-          </Button>
+          <Link href="/api/auth/strava">
+            <Button variant="secondary" className="bg-[#7B3FB5] text-white hover:bg-[#6A36A0]">
+              Connect Strava
+            </Button>
+          </Link>
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white">GW</div>
         </div>
       </div>

@@ -318,14 +318,17 @@ export async function GET(request: Request) {
     });
 
   } catch (error: any) {
+    if (error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     console.error('Error fetching Strava activities:', error);
     console.error('Error stack:', error.stack);
     return NextResponse.json(
-      { 
-        error: 'Failed to fetch Strava activities', 
+      {
+        error: 'Failed to fetch Strava activities',
         details: error.message,
         stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      }, 
+      },
       { status: 500 }
     );
   }

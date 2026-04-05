@@ -68,6 +68,10 @@ export default function Dashboard() {
         cache: 'no-store' // Force fresh data from Strava
       })
         
+        if (response.status === 401) {
+          router.push('/')
+          return
+        }
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
           throw new Error(errorData.error || errorData.details || 'Failed to fetch activities')

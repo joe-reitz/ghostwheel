@@ -5,7 +5,8 @@ import {
   createOrUpdateActivity,
   updateTrainingLoad,
   getBikeByStravaGearId,
-  updateBikeStats
+  updateBikeStats,
+  updateUserTokens
 } from '@/lib/db';
 import {
   calculateCTL,
@@ -87,7 +88,12 @@ export async function GET(request: Request) {
     if (user.token_expires_at && new Date(user.token_expires_at) < new Date()) {
       const refreshedData = await refreshStravaToken(user.refresh_token);
       accessToken = refreshedData.access_token;
-      // Update tokens in DB (you'd need to implement updateUserTokens)
+      await updateUserTokens(
+        user.id,
+        refreshedData.access_token,
+        refreshedData.refresh_token,
+        new Date(refreshedData.expires_at * 1000)
+      );
     }
 
     // Fetch activities from Strava

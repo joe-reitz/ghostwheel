@@ -4,8 +4,8 @@ import ReactMarkdown from 'react-markdown'
 
 export function Markdown({ children, className }: { children: string; className?: string }) {
   return (
+    <div className={className}>
     <ReactMarkdown
-      className={className}
       components={{
         p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
         strong: ({ children }) => <span className="font-semibold text-white">{children}</span>,
@@ -20,5 +20,6 @@ export function Markdown({ children, className }: { children: string; className?
     >
       {children}
     </ReactMarkdown>
+    </div>
   )
 }

@@ -2,7 +2,7 @@ import { generateText, generateObject } from 'ai';
 import { gateway } from '@ai-sdk/gateway';
 import { z } from 'zod';
 
-const model = gateway('anthropic/claude-sonnet-4-5');
+const model = gateway('anthropic/claude-sonnet-4.5');
 
 export interface RideData {
   name: string;

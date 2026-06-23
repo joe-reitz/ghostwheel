@@ -5,7 +5,7 @@ import { gateway } from '@ai-sdk/gateway';
 import { sql, updateUserTokens } from '@/lib/db';
 import { refreshStravaToken } from '@/lib/strava';
 
-const model = gateway('anthropic/claude-sonnet-4-5');
+const model = gateway('anthropic/claude-sonnet-4.5');
 
 export async function POST(
   request: NextRequest,

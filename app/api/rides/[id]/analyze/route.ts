@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/session';
 import { generateText } from 'ai';
 import { gateway } from '@ai-sdk/gateway';
-import { sql } from '@/lib/db';
+import { sql, updateUserTokens } from '@/lib/db';
+import { refreshStravaToken } from '@/lib/strava';
 
 const model = gateway('anthropic/claude-sonnet-4-5');
 
@@ -20,12 +21,25 @@ export async function POST(
     const { userPrompt, conversationHistory } = await request.json();
     const { id: activityId } = await params;
 
+    // Refresh token if expired (mirrors the ride-details route)
+    let accessToken = user.accessToken;
+    if (user.tokenExpiresAt && new Date(user.tokenExpiresAt) < new Date()) {
+      const refreshed = await refreshStravaToken(user.refreshToken);
+      accessToken = refreshed.access_token;
+      await updateUserTokens(
+        user.id,
+        refreshed.access_token,
+        refreshed.refresh_token,
+        new Date(refreshed.expires_at * 1000)
+      );
+    }
+
     // Fetch activity details from Strava
     const stravaResponse = await fetch(
       `https://www.strava.com/api/v3/activities/${activityId}`,
       {
         headers: {
-          Authorization: `Bearer ${user.accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
         },
       }
     );
@@ -207,10 +221,17 @@ Keep responses concise but informative (2-4 paragraphs unless more detail is spe
       }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error analyzing ride:', error);
+    const message = error?.message ?? String(error);
     return NextResponse.json(
-      { error: 'Failed to analyze ride' },
+      {
+        error: 'Failed to analyze ride',
+        details: message,
+        hint: message.includes('AI_GATEWAY_API_KEY') || message.toLowerCase().includes('gateway')
+          ? 'The AI Coach requires AI_GATEWAY_API_KEY to be configured in your environment variables.'
+          : undefined,
+      },
       { status: 500 }
     );
   }

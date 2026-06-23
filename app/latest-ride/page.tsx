@@ -51,7 +51,6 @@ export default function LatestRidePage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState("")
   const [isAsking, setIsAsking] = useState(false)
-  const [autoAnalyzed, setAutoAnalyzed] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -61,18 +60,6 @@ export default function LatestRidePage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
-
-  useEffect(() => {
-    // Auto-analyze when ride is loaded
-    if (ride && !autoAnalyzed && messages.length === 0) {
-      setAutoAnalyzed(true)
-      setInputValue("Give me a quick analysis of this ride and any coaching insights.")
-      // Trigger the analysis after a short delay
-      setTimeout(() => {
-        askQuestion("Give me a quick analysis of this ride and any coaching insights.")
-      }, 500)
-    }
-  }, [ride, autoAnalyzed, messages.length])
 
   async function fetchLatestRide() {
     try {
@@ -169,11 +156,12 @@ export default function LatestRidePage() {
         })
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to get AI response')
-      }
-
       const data = await response.json()
+
+      if (!response.ok) {
+        const detail = data.hint || data.details || data.error || 'Failed to get AI response'
+        throw new Error(detail)
+      }
 
       const assistantMessage: Message = {
         role: 'assistant',
@@ -186,7 +174,7 @@ export default function LatestRidePage() {
       console.error('Error asking question:', error)
       const errorMessage: Message = {
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: `Sorry, I couldn't analyze this ride: ${error instanceof Error ? error.message : 'Unknown error'}`,
         timestamp: new Date()
       }
       setMessages(prev => [...prev, errorMessage])
@@ -397,7 +385,15 @@ export default function LatestRidePage() {
             {messages.length === 0 && !isAsking ? (
               <div className="text-center py-12">
                 <Bot size={48} className="text-purple-400 mx-auto mb-4 opacity-50" />
-                <p className="text-gray-400 mb-2">Analyzing your ride...</p>
+                <p className="text-gray-400 mb-4">Get AI coaching insights on your latest ride.</p>
+                <button
+                  onClick={() => askQuestion("Give me a quick analysis of this ride and any coaching insights.")}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg transition-colors inline-flex items-center gap-2"
+                >
+                  <Bot size={18} />
+                  Analyze this ride
+                </button>
+                <p className="text-xs text-gray-500 mt-3">…or ask your own question below.</p>
               </div>
             ) : (
               messages.map((message, index) => (
